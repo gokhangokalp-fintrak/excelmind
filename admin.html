@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExcelMind — Admin Panel</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --blue: #2F80ED; --blue-dark: #1a5276; --blue-light: #eef5ff;
+  --green: #27AE60; --green-light: #eafaf1;
+  --orange: #E67E22; --red: #E74C3C; --purple: #9B59B6;
+  --text: #1a2332; --text-light: #6b7c93; --text-muted: #8899aa;
+  --bg: #f0f4f8; --white: #ffffff;
+  --shadow: 0 4px 20px rgba(0,0,0,0.06);
+  --radius: 16px; --radius-sm: 12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); }
+
+/* Sidebar */
+.layout { display:flex; min-height:100vh; }
+.sidebar {
+  width:240px; background:var(--blue-dark); padding:20px 0;
+  display:flex; flex-direction:column; position:fixed; height:100vh; z-index:10;
+}
+.sidebar-logo {
+  padding:0 20px 24px; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:16px;
+  display:flex; align-items:center; gap:10px; text-decoration:none;
+}
+.sidebar-logo h1 { color:#fff; font-size:20px; font-weight:800; }
+.sidebar-logo h1 span { color:var(--green); }
+.sidebar-badge { background:var(--orange); color:#fff; font-size:9px; font-weight:700; padding:3px 8px; border-radius:20px; }
+
+.nav-items { flex:1; padding:0 8px; }
+.nav-item {
+  display:flex; align-items:center; gap:12px; padding:11px 16px; border-radius:10px;
+  color:rgba(255,255,255,0.6); font-size:14px; font-weight:500; cursor:pointer;
+  transition:all 0.2s; margin-bottom:2px;
+}
+.nav-item:hover { color:#fff; background:rgba(255,255,255,0.08); }
+.nav-item.active { color:#fff; background:rgba(255,255,255,0.12); font-weight:600; }
+.nav-item svg { width:18px; height:18px; flex-shrink:0; }
+
+.sidebar-footer { padding:16px 20px; border-top:1px solid rgba(255,255,255,0.1); }
+.sidebar-footer a { color:rgba(255,255,255,0.5); font-size:12px; text-decoration:none; }
+.sidebar-footer a:hover { color:#fff; }
+
+/* Main */
+.main { margin-left:240px; flex:1; padding:28px 32px; min-height:100vh; }
+
+/* Header */
+.page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; }
+.page-header h2 { font-size:24px; font-weight:800; }
+.page-header .date { font-size:13px; color:var(--text-light); }
+
+/* KPI Cards */
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+.kpi-card {
+  background:var(--white); border-radius:var(--radius); padding:22px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2;
+}
+.kpi-card .label { font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; }
+.kpi-card .value { font-size:32px; font-weight:800; margin-bottom:4px; }
+.kpi-card .sub { font-size:12px; color:var(--text-light); display:flex; align-items:center; gap:4px; }
+.kpi-card .sub .up { color:var(--green); }
+.kpi-card .sub .down { color:var(--red); }
+.kpi-card.blue .value { color:var(--blue); }
+.kpi-card.green .value { color:var(--green); }
+.kpi-card.orange .value { color:var(--orange); }
+.kpi-card.purple .value { color:var(--purple); }
+
+/* Charts Row */
+.charts-row { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:28px; }
+.card {
+  background:var(--white); border-radius:var(--radius); padding:24px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2;
+}
+.card h3 { font-size:15px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+.card h3 svg { width:18px; height:18px; color:var(--blue); }
+
+/* Tables */
+.table-wrap { overflow-x:auto; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th { background:#f8fafc; color:var(--text-light); font-weight:600; text-align:left; padding:10px 14px; border-bottom:2px solid #e0e7ef; white-space:nowrap; }
+td { padding:10px 14px; border-bottom:1px solid #f0f2f5; }
+tr:hover td { background:#fafbfc; }
+
+/* Badges */
+.badge { padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; display:inline-block; }
+.badge-pro { background:#e8f5e9; color:#2e7d32; }
+.badge-trial { background:#e3f2fd; color:#1565c0; }
+.badge-free { background:#f5f5f5; color:#757575; }
+.badge-admin { background:#fff3e0; color:#e65100; }
+
+/* User avatar */
+.user-info { display:flex; align-items:center; gap:10px; }
+.user-avatar { width:32px; height:32px; border-radius:50%; background:var(--blue-light); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:var(--blue); }
+
+/* Buttons */
+.btn { padding:6px 14px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:none; transition:all 0.2s; }
+.btn-sm { padding:4px 10px; font-size:11px; }
+.btn-blue { background:var(--blue-light); color:var(--blue); }
+.btn-blue:hover { background:var(--blue); color:#fff; }
+.btn-green { background:var(--green-light); color:var(--green); }
+.btn-green:hover { background:var(--green); color:#fff; }
+
+/* Sections */
+.section { display:none; }
+.section.active { display:block; }
+
+/* Loading */
+.loading-overlay {
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  background:rgba(240,244,248,0.95); display:flex; align-items:center;
+  justify-content:center; z-index:999; flex-direction:column; gap:16px;
+}
+.spinner { width:40px; height:40px; border:4px solid #e0e7ef; border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+
+/* Auth check */
+.auth-error {
+  display:flex; align-items:center; justify-content:center; min-height:100vh;
+  flex-direction:column; gap:16px; text-align:center;
+}
+.auth-error h2 { font-size:24px; color:var(--text); }
+.auth-error p { color:var(--text-light); }
+
+/* Responsive */
+@media (max-width:768px) {
+  .sidebar { display:none; }
+  .main { margin-left:0; padding:16px; }
+  .kpi-row { grid-template-columns:1fr 1fr; }
+  .charts-row { grid-template-columns:1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- Loading -->
+<div id="loadingOverlay" class="loading-overlay">
+  <div class="spinner"></div>
+  <div style="font-size:16px;font-weight:600;color:var(--text)">Yükleniyor...</div>
+</div>
+
+<!-- Auth Error (hidden by default) -->
+<div id="authError" class="auth-error" style="display:none">
+  <svg viewBox="0 0 24 24" fill="none" stroke="var(--red)" stroke-width="2" width="48" height="48"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+  <h2>Yetkisiz Erişim</h2>
+  <p>Bu sayfaya erişim yetkiniz yok. Admin hesabıyla giriş yapmanız gerekiyor.</p>
+  <a href="/" style="color:var(--blue);font-weight:600;text-decoration:none">Ana Sayfaya Dön</a>
+</div>
+
+<!-- Main Layout -->
+<div id="adminLayout" class="layout" style="display:none">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <a href="/" class="sidebar-logo">
+      <h1>Excel<span>Mind</span></h1>
+      <span class="sidebar-badge">ADMIN</span>
+    </a>
+
+    <nav class="nav-items">
+      <div class="nav-item active" onclick="showSection('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="showSection('users')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Kullanıcılar
+      </div>
+      <div class="nav-item" onclick="showSection('activity')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Aktivite
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <a href="/">← Ana Sayfaya Dön</a>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+
+    <!-- DASHBOARD SECTION -->
+    <div id="sec-dashboard" class="section active">
+      <div class="page-header">
+        <h2>Dashboard</h2>
+        <div class="date" id="currentDate"></div>
+      </div>
+
+      <div class="kpi-row">
+        <div class="kpi-card blue">
+          <div class="label">Toplam Kullanıcı</div>
+          <div class="value" id="kpi-total-users">-</div>
+          <div class="sub">Bugün: <span id="kpi-new-today">0</span> yeni</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="label">Pro Üyeler</div>
+          <div class="value" id="kpi-pro-users">-</div>
+          <div class="sub">Deneme: <span id="kpi-trial-users">0</span></div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="label">Bu Ay Yükleme</div>
+          <div class="value" id="kpi-uploads">-</div>
+          <div class="sub">AI Analiz: <span id="kpi-ai">0</span></div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="label">Bugün Sayfa Görüntüleme</div>
+          <div class="value" id="kpi-views">-</div>
+          <div class="sub">Aktif kullanıcılar</div>
+        </div>
+      </div>
+
+      <div class="charts-row">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Günlük Trafik (Son 30 Gün)
+          </h3>
+          <canvas id="trafficChart" height="120"></canvas>
+        </div>
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Popüler Veri Türleri
+          </h3>
+          <canvas id="typesChart" height="180"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          Yeni Kayıtlar (Son 30 Gün)
+        </h3>
+        <canvas id="signupsChart" height="80"></canvas>
+      </div>
+    </div>
+
+    <!-- USERS SECTION -->
+    <div id="sec-users" class="section">
+      <div class="page-header">
+        <h2>Kullanıcılar</h2>
+        <div class="date">Toplam: <strong id="users-total">0</strong></div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Kullanıcı</th>
+                <th>Plan</th>
+                <th>Yükleme</th>
+                <th>AI Analiz</th>
+                <th>Kayıt Tarihi</th>
+                <th>Son Giriş</th>
+                <th>İşlem</th>
+              </tr>
+            </thead>
+            <tbody id="usersTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ACTIVITY SECTION -->
+    <div id="sec-activity" class="section">
+      <div class="page-header">
+        <h2>Aktivite Logları</h2>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Zaman</th>
+                <th>Kullanıcı</th>
+                <th>İşlem</th>
+                <th>Dosya</th>
+                <th>Veri Türü</th>
+                <th>IP</th>
+              </tr>
+            </thead>
+            <tbody id="activityTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+// ===== STATE =====
+let charts = {};
+
+// ===== INIT =====
+async function init() {
+  // Check auth
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+
+    if (!data.logged_in || !data.user.is_admin) {
+      document.getElementById('loadingOverlay').style.display = 'none';
+      document.getElementById('authError').style.display = 'flex';
+      return;
+    }
+
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('adminLayout').style.display = 'flex';
+
+    // Set date
+    document.getElementById('currentDate').textContent = new Date().toLocaleDateString('tr-TR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+
+    // Load data
+    loadDashboard();
+    loadUsers();
+    loadActivity();
+
+  } catch(e) {
+    console.error('Auth check failed:', e);
+    document.getElementById('loadingOverlay').style.display = 'none';
+    document.getElementById('authError').style.display = 'flex';
+  }
+}
+
+// ===== NAVIGATION =====
+function showSection(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ===== LOAD DASHBOARD =====
+async function loadDashboard() {
+  try {
+    const res = await fetch('/api/admin/stats');
+    const data = await res.json();
+
+    // KPIs
+    document.getElementById('kpi-total-users').textContent = data.users.total;
+    document.getElementById('kpi-new-today').textContent = data.users.new_today;
+    document.getElementById('kpi-pro-users').textContent = data.users.pro;
+    document.getElementById('kpi-trial-users').textContent = data.users.trial;
+    document.getElementById('kpi-uploads').textContent = data.activity.uploads_month;
+    document.getElementById('kpi-ai').textContent = data.activity.ai_analyses_month;
+    document.getElementById('kpi-views').textContent = data.activity.views_today;
+
+    // Traffic Chart
+    if (charts.traffic) charts.traffic.destroy();
+    const tCtx = document.getElementById('trafficChart').getContext('2d');
+    charts.traffic = new Chart(tCtx, {
+      type: 'line',
+      data: {
+        labels: data.daily_views.map(d => d.day.slice(5)),
+        datasets: [{
+          label: 'Sayfa Görüntüleme',
+          data: data.daily_views.map(d => d.count),
+          borderColor: '#2F80ED', backgroundColor: 'rgba(47,128,237,0.1)',
+          fill: true, tension: 0.4, borderWidth: 2, pointRadius: 2
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+    // Data Types Chart
+    if (charts.types) charts.types.destroy();
+    if (data.top_data_types.length > 0) {
+      const dCtx = document.getElementById('typesChart').getContext('2d');
+      charts.types = new Chart(dCtx, {
+        type: 'doughnut',
+        data: {
+          labels: data.top_data_types.map(t => t.data_type),
+          datasets: [{
+            data: data.top_data_types.map(t => t.cnt),
+            backgroundColor: ['#2F80ED','#27AE60','#E67E22','#9B59B6','#E74C3C']
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+      });
+    }
+
+    // Signups Chart
+    if (charts.signups) charts.signups.destroy();
+    const sCtx = document.getElementById('signupsChart').getContext('2d');
+    charts.signups = new Chart(sCtx, {
+      type: 'bar',
+      data: {
+        labels: data.daily_signups.map(d => d.day.slice(5)),
+        datasets: [{
+          label: 'Yeni Kayıt',
+          data: data.daily_signups.map(d => d.count),
+          backgroundColor: '#27AE60', borderRadius: 4
+        }]
+      },
+      options: { responsive: true, plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+
+  } catch(e) {
+    console.error('Dashboard load error:', e);
+  }
+}
+
+// ===== LOAD USERS =====
+async function loadUsers() {
+  try {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+
+    document.getElementById('users-total').textContent = data.total;
+
+    const tbody = document.getElementById('usersTable');
+    tbody.innerHTML = data.users.map(u => {
+      const initials = (u.name || u.email).slice(0, 2).toUpperCase();
+      const planBadge = u.plan === 'pro' ? '<span class="badge badge-pro">Pro</span>'
+        : u.plan === 'trial' ? '<span class="badge badge-trial">Trial</span>'
+        : '<span class="badge badge-free">Free</span>';
+      const adminBadge = u.is_admin ? ' <span class="badge badge-admin">Admin</span>' : '';
+      const created = new Date(u.created_at).toLocaleDateString('tr-TR');
+      const lastLogin = new Date(u.last_login).toLocaleDateString('tr-TR');
+
+      return `<tr>
+        <td>
+          <div class="user-info">
+            ${u.avatar_url ? `<img src="${u.avatar_url}" style="width:32px;height:32px;border-radius:50%">` : `<div class="user-avatar">${initials}</div>`}
+            <div>
+              <div style="font-weight:600;font-size:13px">${u.name || u.email.split('@')[0]}</div>
+              <div style="font-size:11px;color:var(--text-muted)">${u.email}</div>
+            </div>
+          </div>
+        </td>
+        <td>${planBadge}${adminBadge}</td>
+        <td>${u.upload_count || 0}</td>
+        <td>${u.ai_count || 0}</td>
+        <td>${created}</td>
+        <td>${lastLogin}</td>
+        <td>
+          <select class="btn btn-sm btn-blue" onchange="updateUserPlan('${u.id}', this.value)">
+            <option value="free" ${u.plan==='free'?'selected':''}>Free</option>
+            <option value="trial" ${u.plan==='trial'?'selected':''}>Trial</option>
+            <option value="pro" ${u.plan==='pro'?'selected':''}>Pro</option>
+          </select>
+        </td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('Users load error:', e);
+  }
+}
+
+// ===== LOAD ACTIVITY =====
+async function loadActivity() {
+  try {
+    const res = await fetch('/api/admin/usage');
+    const data = await res.json();
+
+    const tbody = document.getElementById('activityTable');
+    tbody.innerHTML = data.logs.map(log => {
+      const time = new Date(log.created_at).toLocaleString('tr-TR');
+      const actionNames = { upload: 'Dosya Yükleme', generate: 'Akıllı Excel', ai_analyze: 'AI Analiz' };
+      return `<tr>
+        <td style="white-space:nowrap">${time}</td>
+        <td>${log.email || 'Anonim'}</td>
+        <td><span class="badge badge-trial">${actionNames[log.action] || log.action}</span></td>
+        <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${log.filename || '-'}</td>
+        <td>${log.data_type || '-'}</td>
+        <td style="font-size:11px;color:var(--text-muted)">${log.ip_address || '-'}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.error('Activity load error:', e);
+  }
+}
+
+// ===== UPDATE USER =====
+async function updateUserPlan(userId, plan) {
+  try {
+    await fetch(`/api/admin/user/${userId}/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan })
+    });
+  } catch(e) {
+    console.error('Update error:', e);
+    alert('Güncelleme başarısız');
+  }
+}
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>

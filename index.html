@@ -631,8 +631,65 @@ body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); 
   <div class="nav-right">
     <a href="#" class="nav-link" onclick="showView('landing')">Ana Sayfa</a>
     <a href="#" class="nav-link" id="dashLink" style="display:none" onclick="showView('dashboard')">Dashboard</a>
+    <!-- Auth buttons -->
+    <div id="authBtns">
+      <a href="#" class="nav-link" id="loginBtn" onclick="showLoginModal()" style="background:rgba(255,255,255,0.1);border-radius:8px">Giriş Yap</a>
+    </div>
+    <div id="userMenu" style="display:none;position:relative">
+      <div onclick="toggleUserDropdown()" style="display:flex;align-items:center;gap:8px;cursor:pointer;padding:6px 12px;border-radius:8px;transition:all 0.2s" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='transparent'">
+        <div id="userAvatar" style="width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff"></div>
+        <span id="userName" style="color:#fff;font-size:13px;font-weight:600"></span>
+        <span id="userPlanBadge" style="font-size:10px;padding:2px 8px;border-radius:10px;font-weight:700"></span>
+      </div>
+      <div id="userDropdown" style="display:none;position:absolute;right:0;top:42px;background:#fff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.15);min-width:200px;padding:8px;z-index:200">
+        <div id="userEmail" style="padding:10px 12px;font-size:12px;color:#6b7c93;border-bottom:1px solid #f0f2f5;margin-bottom:4px"></div>
+        <div id="userPlanInfo" style="padding:8px 12px;font-size:12px;color:#1a2332"></div>
+        <a id="adminLink" href="/admin" style="display:none;padding:8px 12px;font-size:13px;color:#E67E22;text-decoration:none;border-radius:6px;font-weight:600" onmouseover="this.style.background='#fff8e1'" onmouseout="this.style.background='transparent'">Admin Panel</a>
+        <div onclick="doLogout()" style="padding:8px 12px;font-size:13px;color:#E74C3C;cursor:pointer;border-radius:6px;font-weight:500" onmouseover="this.style.background='#fef5f5'" onmouseout="this.style.background='transparent'">Çıkış Yap</div>
+      </div>
+    </div>
   </div>
 </nav>
+
+<!-- LOGIN MODAL -->
+<div id="loginModal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:20px;padding:40px;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);position:relative">
+    <div onclick="hideLoginModal()" style="position:absolute;top:16px;right:16px;cursor:pointer;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:18px;color:#8899aa" onmouseover="this.style.background='#f0f2f5'" onmouseout="this.style.background='transparent'">&times;</div>
+
+    <div style="text-align:center;margin-bottom:28px">
+      <h2 style="font-size:22px;font-weight:800;color:#1a2332;margin-bottom:6px">ExcelMind'a Giriş Yap</h2>
+      <p style="font-size:14px;color:#6b7c93">14 gün ücretsiz deneyin, kredi kartı gerekmez</p>
+    </div>
+
+    <!-- Google Login -->
+    <div id="googleLoginBtn" style="display:none;margin-bottom:16px">
+      <div id="g_id_onload" data-callback="handleGoogleLogin"></div>
+    </div>
+
+    <!-- Divider -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+      <div style="flex:1;height:1px;background:#e0e7ef"></div>
+      <span style="font-size:12px;color:#8899aa;font-weight:500">E-posta ile giriş</span>
+      <div style="flex:1;height:1px;background:#e0e7ef"></div>
+    </div>
+
+    <!-- Magic Link Form -->
+    <form onsubmit="sendMagicLink(event)">
+      <input type="email" id="loginEmail" placeholder="ornek@email.com" required
+        style="width:100%;padding:14px 16px;border:2px solid #e0e7ef;border-radius:12px;font-size:15px;font-family:inherit;outline:none;transition:border 0.2s;margin-bottom:14px"
+        onfocus="this.style.borderColor='#2F80ED'" onblur="this.style.borderColor='#e0e7ef'">
+      <button type="submit" id="magicLinkBtn"
+        style="width:100%;padding:14px;background:linear-gradient(135deg,#2F80ED,#2e86c1);color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s">
+        Giriş Linki Gönder
+      </button>
+    </form>
+    <div id="magicLinkMsg" style="display:none;margin-top:14px;padding:12px 16px;border-radius:10px;font-size:13px;text-align:center"></div>
+
+    <p style="text-align:center;margin-top:20px;font-size:11px;color:#8899aa">
+      Giriş yaparak <a href="#" style="color:#2F80ED;text-decoration:none">Kullanım Koşullarını</a> kabul etmiş olursunuz.
+    </p>
+  </div>
+</div>
 
 <!-- ===== LANDING VIEW ===== -->
 <div id="view-landing" class="view active">
@@ -2718,6 +2775,165 @@ async function downloadPDF() {
   btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg> PDF İndir';
   btn.disabled = false;
 }
+
+// ===== AUTH SYSTEM =====
+let currentUser = null;
+
+function showLoginModal() {
+  const modal = document.getElementById('loginModal');
+  modal.style.display = 'flex';
+  document.getElementById('loginEmail').focus();
+}
+
+function hideLoginModal() {
+  document.getElementById('loginModal').style.display = 'none';
+  document.getElementById('magicLinkMsg').style.display = 'none';
+}
+
+function toggleUserDropdown() {
+  const dd = document.getElementById('userDropdown');
+  dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', function(e) {
+  const menu = document.getElementById('userMenu');
+  const dd = document.getElementById('userDropdown');
+  if (menu && dd && !menu.contains(e.target)) dd.style.display = 'none';
+});
+
+async function sendMagicLink(e) {
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value.trim();
+  const btn = document.getElementById('magicLinkBtn');
+  const msg = document.getElementById('magicLinkMsg');
+
+  btn.textContent = 'Gönderiliyor...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/auth/magic-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+
+    msg.style.display = 'block';
+    if (data.success) {
+      msg.style.background = '#eafaf1';
+      msg.style.color = '#27AE60';
+      msg.innerHTML = '<strong>E-posta gönderildi!</strong><br>Gelen kutunuzu kontrol edin ve giriş linkine tıklayın.';
+    } else {
+      msg.style.background = '#fef5f5';
+      msg.style.color = '#E74C3C';
+      msg.textContent = data.error || 'Bir hata oluştu';
+    }
+  } catch(err) {
+    msg.style.display = 'block';
+    msg.style.background = '#fef5f5';
+    msg.style.color = '#E74C3C';
+    msg.textContent = 'Bağlantı hatası';
+  }
+
+  btn.textContent = 'Giriş Linki Gönder';
+  btn.disabled = false;
+}
+
+function handleGoogleLogin(response) {
+  fetch('/api/auth/google', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ credential: response.credential })
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.success) {
+      hideLoginModal();
+      checkAuth();
+    }
+  });
+}
+
+async function doLogout() {
+  await fetch('/api/auth/logout', { method: 'POST' });
+  currentUser = null;
+  document.getElementById('authBtns').style.display = 'block';
+  document.getElementById('userMenu').style.display = 'none';
+  document.getElementById('userDropdown').style.display = 'none';
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    const data = await res.json();
+
+    if (data.logged_in && data.user) {
+      currentUser = data.user;
+      document.getElementById('authBtns').style.display = 'none';
+      document.getElementById('userMenu').style.display = 'block';
+
+      const initials = (data.user.name || data.user.email).slice(0, 2).toUpperCase();
+      const avatarEl = document.getElementById('userAvatar');
+      if (data.user.avatar) {
+        avatarEl.innerHTML = `<img src="${data.user.avatar}" style="width:30px;height:30px;border-radius:50%">`;
+      } else {
+        avatarEl.textContent = initials;
+      }
+
+      document.getElementById('userName').textContent = data.user.name || data.user.email.split('@')[0];
+      document.getElementById('userEmail').textContent = data.user.email;
+
+      // Plan badge
+      const badge = document.getElementById('userPlanBadge');
+      if (data.user.plan === 'pro') {
+        badge.textContent = 'PRO'; badge.style.background = '#27AE60'; badge.style.color = '#fff';
+      } else if (data.user.plan === 'trial') {
+        badge.textContent = `TRIAL ${data.user.days_left || ''}g`; badge.style.background = '#2F80ED'; badge.style.color = '#fff';
+      } else {
+        badge.textContent = 'FREE'; badge.style.background = 'rgba(255,255,255,0.2)'; badge.style.color = '#fff';
+      }
+
+      // Plan info
+      const planInfo = document.getElementById('userPlanInfo');
+      if (data.user.plan === 'free') {
+        planInfo.innerHTML = `Bu ay: ${data.user.uploads_this_month}/${data.user.upload_limit} yükleme`;
+      } else if (data.user.plan === 'trial') {
+        planInfo.innerHTML = `Deneme: ${data.user.days_left} gün kaldı`;
+      } else {
+        planInfo.innerHTML = 'Sınırsız kullanım';
+      }
+
+      // Admin link
+      if (data.user.is_admin) {
+        document.getElementById('adminLink').style.display = 'block';
+      }
+    }
+  } catch(e) {
+    console.log('[AUTH] Not logged in or error:', e);
+  }
+}
+
+// Check auth on page load
+checkAuth();
+
+// Check URL params for auth redirect
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('auth') === 'success') {
+  window.history.replaceState({}, '', '/');
+  checkAuth();
+}
+if (urlParams.get('auth') === 'expired') {
+  window.history.replaceState({}, '', '/');
+  alert('Giriş linki süresi dolmuş. Lütfen tekrar deneyin.');
+}
+
+// Track page view
+fetch('/api/track', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ path: window.location.pathname })
+}).catch(() => {});
 </script>
 
 </body>

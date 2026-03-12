@@ -1,2 +1,5 @@
+flask>=3.0
+gunicorn>=21.0
 openpyxl>=3.1.0
 xlrd
+psycopg2-binary>=2.9
