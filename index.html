@@ -752,7 +752,7 @@ function handleFile(file) {
       updateProgress(60, 'AI veri türünü tanımlıyor...');
       setTimeout(() => {
         updateProgress(80, 'Sınıflandırma tamamlanıyor...');
-        const detected = detectDataType(headers, json);
+        const detected = detectDataType(headers, parsedData);
         selectedType = detected;
 
         // Update classify view
