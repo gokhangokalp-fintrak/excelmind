@@ -695,7 +695,8 @@ function detectDataType(headers, data) {
   const sampleValues = data.slice(0, 30).flatMap(r => headers.map(col => String(r[col] || '').toLowerCase())).join(' ');
   const allWithData = all + ' ' + sampleValues;
 
-  // Sales keywords (must have BOTH value + product/customer columns)
+  // Sales keywords: need (product OR customer) AND (amount/price/quantity) — typical sales data pattern
+  if (/ürün|urun|product/i.test(all) && /tutar|fiyat|adet|amount|price|quantity|toplam|total/i.test(all)) return 'sales';
   if (/sati[sş]|sale|revenue|ciro|fatura|invoice/i.test(all) && /ürün|urun|product|müşteri|musteri|customer|adet|quantity/i.test(all)) return 'sales';
   // E-commerce
   if (/sipari[sş]|order|sku|marketplace|trendyol|amazon|hepsiburada|shopify/i.test(all)) return 'ecommerce';
