@@ -196,8 +196,10 @@ class ExcelMindHandler(SimpleHTTPRequestHandler):
         file_info = files['file']
         data_type = fields.get('type', 'auto')
 
-        # Save temp file
-        tmp_path = os.path.join(UPLOAD_DIR, f"tmp_{uuid.uuid4().hex}.xlsx")
+        # Preserve original extension (.xls vs .xlsx)
+        orig_name = file_info.get('filename', 'file.xlsx')
+        ext = os.path.splitext(orig_name)[1] or '.xlsx'
+        tmp_path = os.path.join(UPLOAD_DIR, f"tmp_{uuid.uuid4().hex}{ext}")
         try:
             with open(tmp_path, 'wb') as f:
                 f.write(file_info['data'])
@@ -220,9 +222,11 @@ class ExcelMindHandler(SimpleHTTPRequestHandler):
         file_info = files['file']
         data_type = fields.get('type', 'auto')
 
-        # Save uploaded file
+        # Save uploaded file (preserve .xls extension)
         file_id = uuid.uuid4().hex
-        input_path = os.path.join(UPLOAD_DIR, f"input_{file_id}.xlsx")
+        orig_name = file_info.get('filename', 'file.xlsx')
+        ext = os.path.splitext(orig_name)[1] or '.xlsx'
+        input_path = os.path.join(UPLOAD_DIR, f"input_{file_id}{ext}")
         output_filename = f"ExcelMind_Smart_{file_id[:8]}.xlsx"
         output_path = os.path.join(OUTPUT_DIR, output_filename)
 
@@ -259,7 +263,9 @@ class ExcelMindHandler(SimpleHTTPRequestHandler):
             return
 
         file_info = files['file']
-        tmp_path = os.path.join(UPLOAD_DIR, f"tmp_{uuid.uuid4().hex}.xlsx")
+        orig_name = file_info.get('filename', 'file.xlsx')
+        ext = os.path.splitext(orig_name)[1] or '.xlsx'
+        tmp_path = os.path.join(UPLOAD_DIR, f"tmp_{uuid.uuid4().hex}{ext}")
 
         try:
             with open(tmp_path, 'wb') as f:

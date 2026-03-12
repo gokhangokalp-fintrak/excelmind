@@ -650,6 +650,53 @@ dropzone.addEventListener('drop', e => {
 });
 fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
 
+// ===== SMART HEADER DETECTION =====
+function findHeaderRow(sheet) {
+  // Convert sheet to array of arrays (raw, no header assumption)
+  const allRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  if (allRows.length === 0) return { headerIdx: 0, rows: allRows };
+
+  // Score each row — header row has most non-empty string cells, followed by data rows
+  let bestIdx = 0, bestScore = 0;
+
+  for (let i = 0; i < Math.min(20, allRows.length - 1); i++) {
+    const row = allRows[i];
+    if (!row || row.length < 2) continue;
+
+    // Count non-empty string cells
+    const nonEmpty = row.filter(v => v !== '' && v !== null && v !== undefined);
+    const strings = nonEmpty.filter(v => typeof v === 'string' && v.trim().length > 0);
+
+    // Skip rows with very few cells
+    if (nonEmpty.length < 3) continue;
+
+    // Check if next row also has data (header should be followed by data)
+    const nextRow = allRows[i + 1];
+    const nextNonEmpty = nextRow ? nextRow.filter(v => v !== '' && v !== null && v !== undefined).length : 0;
+
+    // Score: more non-empty string cells = more likely a header
+    // Bonus: if next row also has data, it's more likely a header
+    // Penalty: if cell values look like data (dates, long text, numbers only)
+    let score = strings.length * 3 + (nextNonEmpty >= nonEmpty.length * 0.5 ? 5 : 0);
+
+    // Bonus for short text cells (typical of headers)
+    const shortStrings = strings.filter(v => v.length < 40);
+    score += shortStrings.length * 2;
+
+    // Bonus for high ratio of unique values (headers are unique)
+    const uniqueRatio = new Set(strings.map(s => s.toLowerCase())).size / Math.max(strings.length, 1);
+    if (uniqueRatio > 0.8) score += 5;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestIdx = i;
+    }
+  }
+
+  console.log(`[HEADER] Detected header row: ${bestIdx + 1} (score: ${bestScore})`);
+  return { headerIdx: bestIdx, rows: allRows };
+}
+
 function handleFile(file) {
   const ext = file.name.split('.').pop().toLowerCase();
   if (!['xlsx','xls','csv'].includes(ext)) { alert('Lütfen .xlsx, .xls veya .csv dosyası yükleyin.'); return; }
@@ -667,12 +714,40 @@ function handleFile(file) {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: 'array', cellDates: true });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
 
-      if (json.length === 0) { alert('Dosyada veri bulunamadı.'); showView('landing'); return; }
+      // Smart header detection — find actual header row
+      const { headerIdx, rows: allRows } = findHeaderRow(sheet);
 
-      headers = Object.keys(json[0]);
-      parsedData = json;
+      // Build headers from detected row
+      const headerRow = allRows[headerIdx] || [];
+      const detectedHeaders = headerRow.map((h, i) => (h !== '' && h !== null && h !== undefined) ? String(h).trim() : `Column_${i+1}`);
+
+      // Build data from rows after header, skip empty/summary rows
+      const dataRows = [];
+      for (let i = headerIdx + 1; i < allRows.length; i++) {
+        const row = allRows[i];
+        if (!row) continue;
+        // Skip rows where most cells are empty (summary/spacer rows)
+        const nonEmpty = row.filter(v => v !== '' && v !== null && v !== undefined);
+        if (nonEmpty.length < 2) continue;
+        // Skip summary rows (common in bank statements: "Итого", "TOPLAM", "Исходящий остаток")
+        const firstCell = String(row[0] || '').toLowerCase();
+        if (/итого|исходящий|входящий|toplam|genel toplam|^total$/i.test(firstCell)) continue;
+
+        const obj = {};
+        detectedHeaders.forEach((h, ci) => {
+          obj[h] = ci < row.length ? (row[ci] !== undefined ? row[ci] : '') : '';
+        });
+        dataRows.push(obj);
+      }
+
+      if (dataRows.length === 0) { alert('Dosyada veri bulunamadı.'); showView('landing'); return; }
+
+      console.log(`[PARSE] Headers (row ${headerIdx + 1}):`, detectedHeaders);
+      console.log(`[PARSE] Data rows: ${dataRows.length}`);
+
+      headers = detectedHeaders.filter(h => !h.startsWith('Column_') || dataRows.some(r => r[h] !== ''));
+      parsedData = dataRows;
 
       updateProgress(60, 'AI veri türünü tanımlıyor...');
       setTimeout(() => {
@@ -709,30 +784,33 @@ function detectDataType(headers, data) {
   const h = headers.map(x => x.toLowerCase().replace(/[_\-\s]/g, ''));
   const all = h.join(' ');
 
-  // Also scan first 30 rows of DATA VALUES for keywords (catches cases where "Gelir"/"Gider" are values, not headers)
+  // Also scan first 30 rows of DATA VALUES for keywords
   const sampleValues = data.slice(0, 30).flatMap(r => headers.map(col => String(r[col] || '').toLowerCase())).join(' ');
   const allWithData = all + ' ' + sampleValues;
 
-  // Sales keywords: need (product OR customer) AND (amount/price/quantity) — typical sales data pattern
+  // Sales keywords
   if (/ürün|urun|product/i.test(all) && /tutar|fiyat|adet|amount|price|quantity|toplam|total/i.test(all)) return 'sales';
   if (/sati[sş]|sale|revenue|ciro|fatura|invoice/i.test(all) && /ürün|urun|product|müşteri|musteri|customer|adet|quantity/i.test(all)) return 'sales';
   // E-commerce
   if (/sipari[sş]|order|sku|marketplace|trendyol|amazon|hepsiburada|shopify/i.test(all)) return 'ecommerce';
   // Inventory
   if (/stok|stock|envanter|inventory|depo|warehouse|miktar/i.test(all)) return 'inventory';
-  // Bank
+  // Bank — Turkish + Russian/Kazakh terms
   if (/banka|bank|hesap|account|iban|havale|eft|virman/i.test(all)) return 'bank';
-  // HR — check BEFORE finance (maaş/salary can overlap, but departman+pozisyon is unique to HR)
+  if (/дебет|кредит|контрагент|валютирован|банк|счет|остаток|назначение/i.test(all)) return 'bank';
+  if (/debit|credit|counterparty|statement/i.test(all) && /amount|balance|transaction/i.test(all)) return 'bank';
+  // Check data values for Russian bank terms
+  if (/народный банк|форте|kaspi|халык|halyk|сбербанк/i.test(allWithData) && /дебет|кредит|счет|перевод|комиссия/i.test(allWithData)) return 'bank';
+  // HR — check BEFORE finance
   if (/departman|department|pozisyon|position|çalışan|calisan|employee/i.test(all)) return 'hr';
   if (/maaş|maas|salary/i.test(all) && /personel|sicil|işegiriş|isegiris|unvan/i.test(all)) return 'hr';
-  // Finance (Gelir-Gider) — check headers AND data values, use specific patterns (avoid short words like "kar" matching names)
+  // Finance (Gelir-Gider)
   if (/gelir|gider|expense|income|maliyet|cost|kâr|profit|zarar|loss|bütçe|butce|budget/i.test(all)) return 'finance';
   if (/\bgelir\b|\bgider\b/i.test(sampleValues)) return 'finance';
-  // Cash flow — specific keywords only
+  // Cash flow
   if (/nakit|cash|flow|tahsilat|borç|borc|alacak/i.test(all)) return 'cashflow';
-  // "ödeme" alone without gelir/gider in data → cashflow
   if (/ödeme|odeme/i.test(all) && !/gelir|gider/i.test(allWithData)) return 'cashflow';
-  // HR fallback (maaş alone)
+  // HR fallback
   if (/maaş|maas|salary/i.test(all)) return 'hr';
   // Customer
   if (/müşteri|musteri|customer|client|firma|company|telefon|phone|email|adres|address/i.test(all)) return 'customers';
@@ -1148,8 +1226,9 @@ function fetchAIInsights() {
     return;
   }
 
+  getUploadableFile().then(file => {
   const formData = new FormData();
-  formData.append('file', uploadedFile);
+  formData.append('file', file || uploadedFile);
 
   fetch('/api/ai-analyze', { method: 'POST', body: formData })
     .then(res => res.json())
@@ -1206,6 +1285,7 @@ function fetchAIInsights() {
       console.error('[AI]', err);
       document.getElementById('aiInsightsLoader').innerHTML = '<div style="color:#999;font-size:13px;padding:8px">AI analiz bağlantısı kurulamadı.</div>';
     });
+  }); // end getUploadableFile().then
 }
 
 // ===== DATA TABLE =====
@@ -1879,14 +1959,43 @@ function downloadSmartExcel() {
 // Global to store the original uploaded file
 let uploadedFile = null;
 
+// Convert .xls to .xlsx in browser before sending to backend (backend needs .xlsx)
+function getUploadableFile() {
+  return new Promise((resolve) => {
+    if (!uploadedFile) { resolve(null); return; }
+    const ext = uploadedFile.name.split('.').pop().toLowerCase();
+    if (ext !== 'xls') { resolve(uploadedFile); return; }
+
+    // Read .xls with SheetJS and re-export as .xlsx
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
+        const xlsxData = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const newName = uploadedFile.name.replace(/\.xls$/i, '.xlsx');
+        const newFile = new File([blob], newName, { type: blob.type });
+        console.log('[CONVERT] .xls → .xlsx converted for backend');
+        resolve(newFile);
+      } catch(err) {
+        console.error('[CONVERT] .xls conversion failed, sending original:', err);
+        resolve(uploadedFile);
+      }
+    };
+    reader.readAsArrayBuffer(uploadedFile);
+  });
+}
+
 function generateSmartExcelViaBackend() {
   const btn = document.querySelector('[onclick="downloadSmartExcel()"]');
   const originalHTML = btn.innerHTML;
   btn.innerHTML = '<span class="spinner"></span> Oluşturuluyor...';
   btn.disabled = true;
 
+  getUploadableFile().then(file => {
   const formData = new FormData();
-  formData.append('file', uploadedFile);
+  formData.append('file', file || uploadedFile);
   formData.append('type', selectedType || 'auto');
 
   fetch('/api/generate', {
@@ -1921,6 +2030,7 @@ function generateSmartExcelViaBackend() {
     btn.innerHTML = originalHTML;
     btn.disabled = false;
   });
+  }); // end getUploadableFile().then
 }
 
 function generateSmartExcelClientSide() {

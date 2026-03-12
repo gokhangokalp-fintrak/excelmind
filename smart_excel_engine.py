@@ -83,11 +83,18 @@ def detect_data_type(headers, data_rows):
     if re.search(r'stok|stock|envanter|inventory|depo|warehouse|miktar', header_text):
         return 'inventory'
 
-    # Bank
+    # Bank — Turkish
     if re.search(r'banka|bank|iban|havale|eft|virman', header_text):
         return 'bank'
-    # Bank also detectable by "hesap" + transaction patterns
     if re.search(r'hesap', header_text) and re.search(r'bakiye|tutar|işlem', header_text):
+        return 'bank'
+    # Bank — Russian/Kazakh/English
+    if re.search(r'дебет|кредит|контрагент|валютирован|остаток|назначение', header_text):
+        return 'bank'
+    if re.search(r'debit|credit|counterparty|statement', header_text) and re.search(r'amount|balance|transaction', header_text):
+        return 'bank'
+    # Bank — data values check (Russian bank names)
+    if re.search(r'народный банк|форте|kaspi|халык|halyk|сбербанк', data_text) and re.search(r'дебет|кредит|счет|перевод|комиссия', data_text):
         return 'bank'
 
     # HR — check BEFORE finance (maaş/salary can overlap, but departman+pozisyon is unique to HR)
@@ -119,27 +126,156 @@ def detect_data_type(headers, data_rows):
 # ============================================================
 # READ EXCEL DATA
 # ============================================================
+def find_header_row(ws):
+    """Smart header row detection — find the actual header row in messy Excel files.
+    Returns 1-based row number."""
+    best_row = 1
+    best_score = 0
+
+    max_scan = min(25, ws.max_row or 1)
+
+    for r in range(1, max_scan + 1):
+        row_vals = [ws.cell(r, c).value for c in range(1, (ws.max_column or 1) + 1)]
+
+        # Count non-empty string cells
+        non_empty = [v for v in row_vals if v is not None and str(v).strip()]
+        strings = [v for v in non_empty if isinstance(v, str) and len(str(v).strip()) > 0]
+
+        if len(non_empty) < 3:
+            continue
+
+        # Check if next row also has data
+        next_non_empty = 0
+        if r < (ws.max_row or 1):
+            next_row = [ws.cell(r + 1, c).value for c in range(1, (ws.max_column or 1) + 1)]
+            next_non_empty = len([v for v in next_row if v is not None and str(v).strip()])
+
+        # Score: more non-empty string cells = more likely a header
+        score = len(strings) * 3
+
+        # Bonus: next row has data
+        if next_non_empty >= len(non_empty) * 0.5:
+            score += 5
+
+        # Bonus for short text cells (typical of headers)
+        short_strings = [v for v in strings if len(str(v)) < 40]
+        score += len(short_strings) * 2
+
+        # Bonus for high unique ratio
+        if strings:
+            unique_ratio = len(set(s.lower() if isinstance(s, str) else str(s) for s in strings)) / len(strings)
+            if unique_ratio > 0.8:
+                score += 5
+
+        if score > best_score:
+            best_score = score
+            best_row = r
+
+    print(f"[ENGINE] Detected header row: {best_row} (score: {best_score})")
+    return best_row
+
+
 def read_excel(input_path):
-    """Read Excel file, return (headers, data_rows, sheet_name)"""
+    """Read Excel file with smart header detection. Returns (headers, data_rows, sheet_name)"""
+    filename = os.path.basename(input_path).lower()
+
+    # Handle .xls files — convert to .xlsx first using openpyxl-compatible approach
+    if filename.endswith('.xls') and not filename.endswith('.xlsx'):
+        try:
+            import xlrd
+            xls_wb = xlrd.open_workbook(input_path)
+            xls_ws = xls_wb.sheet_by_index(0)
+            sheet_name = xls_ws.name or "Veri"
+
+            # Convert to openpyxl workbook
+            wb_new = openpyxl.Workbook()
+            ws_new = wb_new.active
+            ws_new.title = sheet_name
+
+            for r in range(xls_ws.nrows):
+                for c in range(xls_ws.ncols):
+                    val = xls_ws.cell_value(r, c)
+                    cell_type = xls_ws.cell_type(r, c)
+                    if cell_type == xlrd.XL_CELL_DATE:
+                        try:
+                            date_tuple = xlrd.xldate_as_tuple(val, xls_wb.datemode)
+                            val = datetime(*date_tuple[:6])
+                        except:
+                            pass
+                    ws_new.cell(row=r + 1, column=c + 1, value=val)
+
+            # Save as temp xlsx
+            temp_xlsx = input_path + '.xlsx'
+            wb_new.save(temp_xlsx)
+            wb_new.close()
+
+            # Now read with normal flow
+            result = _read_xlsx(temp_xlsx)
+            try:
+                os.remove(temp_xlsx)
+            except:
+                pass
+            return result
+        except ImportError:
+            print("[ENGINE] xlrd not available, trying openpyxl for .xls")
+            # Fall through to openpyxl (might fail for true .xls)
+
+    return _read_xlsx(input_path)
+
+
+def _read_xlsx(input_path):
+    """Internal: Read .xlsx file with smart header detection"""
     src = openpyxl.load_workbook(input_path, data_only=True)
     ws = src.active
     sheet_name = ws.title or "Veri"
-    headers = [cell.value for cell in ws[1]]
-    data_rows = []
 
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        if any(v is not None for v in row):
-            row_list = list(row)
-            # Parse date strings (DD.MM.YYYY format)
-            for ci in range(len(row_list)):
-                if row_list[ci] and isinstance(row_list[ci], str):
-                    try:
-                        parts = row_list[ci].split('.')
-                        if len(parts) == 3 and len(parts[2]) == 4:
-                            row_list[ci] = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
-                    except:
-                        pass
-            data_rows.append(row_list)
+    # Smart header detection
+    header_row = find_header_row(ws)
+
+    headers = [ws.cell(header_row, c).value for c in range(1, (ws.max_column or 1) + 1)]
+    # Clean headers — replace None with Column_N
+    headers = [h if h is not None else f"Column_{i+1}" for i, h in enumerate(headers)]
+
+    data_rows = []
+    for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+        if not any(v is not None for v in row):
+            continue
+
+        row_list = list(row)
+
+        # Skip summary/total rows
+        first_val = str(row_list[0] or '').lower().strip()
+        if any(kw in first_val for kw in ['итого', 'исходящий', 'входящий', 'toplam', 'genel toplam', 'total']):
+            continue
+
+        # Skip rows with too few non-empty cells (spacer rows)
+        non_empty = [v for v in row_list if v is not None and str(v).strip()]
+        if len(non_empty) < 2:
+            continue
+
+        # Parse date strings (DD.MM.YYYY) and numeric strings
+        for ci in range(len(row_list)):
+            if row_list[ci] and isinstance(row_list[ci], str):
+                val = row_list[ci].strip()
+                # Try date format DD.MM.YYYY
+                try:
+                    parts = val.split('.')
+                    if len(parts) == 3 and len(parts[2]) == 4:
+                        row_list[ci] = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
+                        continue
+                except:
+                    pass
+                # Try numeric strings: "31552.00", "167 869.03" (space thousands sep)
+                try:
+                    cleaned = val.replace(' ', '').replace('\u00a0', '')  # remove spaces and nbsp
+                    if cleaned and cleaned.replace('.', '', 1).replace(',', '', 1).replace('-', '', 1).isdigit():
+                        cleaned = cleaned.replace(',', '.')
+                        row_list[ci] = float(cleaned)
+                        continue
+                except:
+                    pass
+
+        data_rows.append(row_list)
 
     src.close()
     return headers, data_rows, sheet_name
@@ -155,7 +291,7 @@ def analyze_columns(headers, data_rows):
     for ci, header in enumerate(headers):
         if header is None:
             continue
-        vals = [r[ci] for r in data_rows if ci < len(r) and r[ci] is not None]
+        vals = [r[ci] for r in data_rows if ci < len(r) and r[ci] is not None and str(r[ci]).strip() != '']
         if not vals:
             continue
 
@@ -164,9 +300,9 @@ def analyze_columns(headers, data_rows):
             roles[ci] = {'type': 'date', 'header': header}
             continue
 
-        # Numeric
+        # Numeric — count actual numbers (not empty strings)
         numeric_count = sum(1 for v in vals[:50] if isinstance(v, (int, float)))
-        if numeric_count > len(vals[:50]) * 0.7:
+        if numeric_count > len(vals[:50]) * 0.5:  # lowered from 0.7 to handle bank Debit/Credit columns
             roles[ci] = {'type': 'numeric', 'header': header}
             continue
 
@@ -192,12 +328,14 @@ def pick_main_value(roles, headers, data_rows):
 
     # Keyword match (prefer total/aggregate columns over unit price)
     # Priority 1: "toplam" keywords (aggregate columns)
-    priority_keywords = ['toplam', 'total', 'net', 'brüt', 'brut']
-    # Priority 2: general value keywords
+    priority_keywords = ['toplam', 'total', 'net', 'brüt', 'brut', 'итого']
+    # Priority 2: general value keywords (Turkish + Russian + English)
     value_keywords = ['tutar', 'fiyat', 'maaş', 'maas', 'amount',
                       'gelir', 'gider', 'satış', 'satis', 'revenue', 'price',
-                      'maliyet', 'cost', 'prim', 'ücret', 'ucret']
-    avoid_keywords = ['bakiye', 'balance', 'sıra', 'no', 'id', 'numara', 'birim']
+                      'maliyet', 'cost', 'prim', 'ücret', 'ucret',
+                      'кредит', 'дебет', 'сумма', 'debit', 'credit']
+    avoid_keywords = ['bakiye', 'balance', 'сіра', 'no', 'id', 'numara', 'birim',
+                      'бик', 'бин', 'иин', 'номер документ', 'счет контрагент']
 
     # First try priority keywords
     for vc in value_cols:
@@ -865,13 +1003,14 @@ def build_smart_excel(input_path, output_path):
                 for c in range(1, 5):
                     ws_trend.cell(row=r, column=c).fill = alt_fill
 
-        # Conditional formatting
+        # Conditional formatting (only if more than 1 month)
         t_last = 4 + len(months_list)
-        green_cf = CellIsRule(operator='greaterThan', formula=['0'], font=Font(color=GREEN), fill=green_fill)
-        red_cf = CellIsRule(operator='lessThan', formula=['0'], font=Font(color=RED),
-                            fill=PatternFill("solid", fgColor="FDEDEC"))
-        ws_trend.conditional_formatting.add(f'C6:D{t_last}', green_cf)
-        ws_trend.conditional_formatting.add(f'C6:D{t_last}', red_cf)
+        if t_last >= 6:  # Need at least 2 months for change column
+            green_cf = CellIsRule(operator='greaterThan', formula=['0'], font=Font(color=GREEN), fill=green_fill)
+            red_cf = CellIsRule(operator='lessThan', formula=['0'], font=Font(color=RED),
+                                fill=PatternFill("solid", fgColor="FDEDEC"))
+            ws_trend.conditional_formatting.add(f'C6:D{t_last}', green_cf)
+            ws_trend.conditional_formatting.add(f'C6:D{t_last}', red_cf)
 
         # Line chart
         lchart = LineChart()
