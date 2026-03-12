@@ -123,11 +123,31 @@ def init_db():
             created_at TIMESTAMP DEFAULT NOW()
         );
 
+        CREATE TABLE IF NOT EXISTS payments (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            email VARCHAR(255),
+            amount DECIMAL(10,2) NOT NULL,
+            currency VARCHAR(10) DEFAULT 'TRY',
+            plan VARCHAR(20) NOT NULL,
+            payment_type VARCHAR(30) NOT NULL,
+            payment_provider VARCHAR(30),
+            provider_payment_id VARCHAR(255),
+            status VARCHAR(20) DEFAULT 'completed',
+            period_start TIMESTAMP,
+            period_end TIMESTAMP,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT NOW()
+        );
+
         CREATE INDEX IF NOT EXISTS idx_sessions_token ON sessions(token);
         CREATE INDEX IF NOT EXISTS idx_magic_links_token ON magic_links(token);
         CREATE INDEX IF NOT EXISTS idx_usage_logs_user ON usage_logs(user_id);
         CREATE INDEX IF NOT EXISTS idx_usage_logs_created ON usage_logs(created_at);
         CREATE INDEX IF NOT EXISTS idx_page_views_created ON page_views(created_at);
+        CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_created ON payments(created_at);
+        CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
     """)
     conn.commit()
     cur.close()
@@ -871,6 +891,65 @@ def admin_stats():
     """)
     daily_signups = [{'day': str(r['day']), 'count': r['cnt']} for r in cur.fetchall()]
 
+    # Revenue stats
+    cur.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM payments WHERE status='completed'
+    """)
+    total_revenue = float(cur.fetchone()['total'])
+
+    cur.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM payments WHERE status='completed' AND created_at > date_trunc('month', NOW())
+    """)
+    month_revenue = float(cur.fetchone()['total'])
+
+    cur.execute("""
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM payments WHERE status='completed' AND created_at::date = CURRENT_DATE
+    """)
+    today_revenue = float(cur.fetchone()['total'])
+
+    cur.execute("""
+        SELECT COUNT(*) as cnt FROM payments WHERE status='completed'
+    """)
+    total_payments = cur.fetchone()['cnt']
+
+    # Monthly revenue trend (last 6 months)
+    cur.execute("""
+        SELECT to_char(created_at, 'YYYY-MM') as month,
+               SUM(amount) as revenue, COUNT(*) as count
+        FROM payments WHERE status='completed'
+        AND created_at > NOW() - INTERVAL '6 months'
+        GROUP BY month ORDER BY month
+    """)
+    monthly_revenue = [{'month': r['month'], 'total': float(r['revenue']), 'count': r['count']} for r in cur.fetchall()]
+
+    # Revenue by plan type
+    cur.execute("""
+        SELECT plan, COUNT(*) as count, SUM(amount) as revenue
+        FROM payments WHERE status='completed'
+        AND created_at > date_trunc('month', NOW())
+        GROUP BY plan ORDER BY revenue DESC
+    """)
+    revenue_by_plan = [{'plan': r['plan'], 'count': r['count'], 'total': float(r['revenue'])} for r in cur.fetchall()]
+
+    # Revenue by payment type
+    cur.execute("""
+        SELECT payment_type, COUNT(*) as count, SUM(amount) as revenue
+        FROM payments WHERE status='completed'
+        AND created_at > date_trunc('month', NOW())
+        GROUP BY payment_type ORDER BY revenue DESC
+    """)
+    revenue_by_type = [{'type': r['payment_type'], 'count': r['count'], 'total': float(r['revenue'])} for r in cur.fetchall()]
+
+    # Trial to Pro conversion rate
+    cur.execute("SELECT COUNT(*) as cnt FROM users WHERE trial_used = TRUE")
+    trial_used = cur.fetchone()['cnt']
+    cur.execute("SELECT COUNT(*) as cnt FROM users WHERE plan = 'pro'")
+    pro_converted = cur.fetchone()['cnt']
+    conversion_rate = (pro_converted / trial_used * 100) if trial_used > 0 else 0
+
     cur.close()
     conn.close()
 
@@ -885,6 +964,16 @@ def admin_stats():
             'views_today': views_today,
             'uploads_month': uploads_month,
             'ai_analyses_month': ai_month
+        },
+        'revenue': {
+            'total_revenue': total_revenue,
+            'month_revenue': month_revenue,
+            'today_revenue': today_revenue,
+            'total_payments': total_payments,
+            'conversion_rate': round(conversion_rate, 1),
+            'monthly_trend': monthly_revenue,
+            'by_plan': revenue_by_plan,
+            'by_type': revenue_by_type
         },
         'top_data_types': top_types,
         'daily_views': daily_views,
@@ -980,6 +1069,79 @@ def admin_update_user(user_id):
     conn.close()
 
     return jsonify({'success': True})
+
+@app.route('/api/admin/payments')
+@require_admin
+def admin_payments():
+    """List all payments"""
+    conn = get_db()
+    cur = conn.cursor()
+
+    cur.execute("""
+        SELECT p.*, u.email, u.name
+        FROM payments p
+        LEFT JOIN users u ON u.id = p.user_id
+        ORDER BY p.created_at DESC
+        LIMIT 200
+    """)
+    payments = []
+    for row in cur.fetchall():
+        r = dict(row)
+        r['id'] = str(r['id'])
+        r['user_id'] = str(r['user_id']) if r['user_id'] else None
+        r['amount'] = float(r['amount'])
+        r['created_at'] = str(r['created_at'])
+        r['period_start'] = str(r['period_start']) if r.get('period_start') else None
+        r['period_end'] = str(r['period_end']) if r.get('period_end') else None
+        payments.append(r)
+
+    cur.close()
+    conn.close()
+    return jsonify({'payments': payments})
+
+@app.route('/api/admin/payments/add', methods=['POST'])
+@require_admin
+def admin_add_payment():
+    """Manually add a payment (for bank transfers, manual upgrades, etc.)"""
+    data = request.get_json()
+    email = data.get('email', '').strip().lower()
+    amount = float(data.get('amount', 0))
+    plan = data.get('plan', 'pro')
+    payment_type = data.get('payment_type', 'manual')
+    notes = data.get('notes', '')
+    currency = data.get('currency', 'TRY')
+
+    if not email or amount <= 0:
+        return jsonify({'error': 'Email ve tutar gerekli'}), 400
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Find user
+    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+    user = cur.fetchone()
+
+    user_id = user['id'] if user else None
+
+    # Record payment
+    cur.execute("""
+        INSERT INTO payments (user_id, email, amount, currency, plan, payment_type,
+                              payment_provider, status, period_start, period_end, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 'completed', NOW(), NOW() + INTERVAL '30 days', %s)
+        RETURNING id
+    """, (user_id, email, amount, currency, plan, payment_type, 'manual', notes))
+
+    payment_id = cur.fetchone()['id']
+
+    # Upgrade user plan if exists
+    if user:
+        cur.execute("UPDATE users SET plan=%s WHERE id=%s", (plan, user_id))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({'success': True, 'payment_id': str(payment_id)})
 
 # ============================================================
 # MAIN

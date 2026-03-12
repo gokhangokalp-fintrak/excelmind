@@ -127,6 +127,10 @@ tr:hover td { background:#fafbfc; }
 .auth-error h2 { font-size:24px; color:var(--text); }
 .auth-error p { color:var(--text-light); }
 
+/* Status badges for payments */
+.badge-success { background:#e8f5e9; color:#2e7d32; }
+.badge-refund { background:#fde8e8; color:#c0392b; }
+
 /* Responsive */
 @media (max-width:768px) {
   .sidebar { display:none; }
@@ -171,6 +175,10 @@ tr:hover td { background:#fafbfc; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Kullanıcılar
       </div>
+      <div class="nav-item" onclick="showSection('revenue')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        Gelir
+      </div>
       <div class="nav-item" onclick="showSection('activity')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
         Aktivite
@@ -192,16 +200,21 @@ tr:hover td { background:#fafbfc; }
         <div class="date" id="currentDate"></div>
       </div>
 
-      <div class="kpi-row">
+      <div class="kpi-row" style="grid-template-columns:repeat(5,1fr)">
         <div class="kpi-card blue">
           <div class="label">Toplam Kullanıcı</div>
           <div class="value" id="kpi-total-users">-</div>
           <div class="sub">Bugün: <span id="kpi-new-today">0</span> yeni</div>
         </div>
         <div class="kpi-card green">
+          <div class="label">Bu Ay Gelir</div>
+          <div class="value" id="kpi-month-revenue">₺0</div>
+          <div class="sub">Toplam: <span id="kpi-total-revenue">₺0</span></div>
+        </div>
+        <div class="kpi-card" style="border-left:4px solid var(--green)">
           <div class="label">Pro Üyeler</div>
-          <div class="value" id="kpi-pro-users">-</div>
-          <div class="sub">Deneme: <span id="kpi-trial-users">0</span></div>
+          <div class="value" id="kpi-pro-users" style="color:var(--green)">-</div>
+          <div class="sub">Deneme: <span id="kpi-trial-users">0</span> | Dönüşüm: <span id="kpi-conversion">0%</span></div>
         </div>
         <div class="kpi-card orange">
           <div class="label">Bu Ay Yükleme</div>
@@ -209,9 +222,9 @@ tr:hover td { background:#fafbfc; }
           <div class="sub">AI Analiz: <span id="kpi-ai">0</span></div>
         </div>
         <div class="kpi-card purple">
-          <div class="label">Bugün Sayfa Görüntüleme</div>
+          <div class="label">Bugün Trafik</div>
           <div class="value" id="kpi-views">-</div>
-          <div class="sub">Aktif kullanıcılar</div>
+          <div class="sub">Sayfa görüntüleme</div>
         </div>
       </div>
 
@@ -293,6 +306,133 @@ tr:hover td { background:#fafbfc; }
       </div>
     </div>
 
+    <!-- REVENUE SECTION -->
+    <div id="sec-revenue" class="section">
+      <div class="page-header">
+        <h2>Gelir Yönetimi</h2>
+        <div class="date">Toplam Gelir: <strong id="rev-total">₺0</strong></div>
+      </div>
+
+      <!-- Revenue KPIs -->
+      <div class="kpi-row">
+        <div class="kpi-card green">
+          <div class="label">Bu Ay Gelir</div>
+          <div class="value" id="rev-month">₺0</div>
+          <div class="sub">Bugün: <span id="rev-today">₺0</span></div>
+        </div>
+        <div class="kpi-card blue">
+          <div class="label">Toplam Ödeme</div>
+          <div class="value" id="rev-count">0</div>
+          <div class="sub">Adet işlem</div>
+        </div>
+        <div class="kpi-card orange">
+          <div class="label">Ortalama Ödeme</div>
+          <div class="value" id="rev-avg">₺0</div>
+          <div class="sub">Ödeme başına</div>
+        </div>
+        <div class="kpi-card purple">
+          <div class="label">Dönüşüm Oranı</div>
+          <div class="value" id="rev-conversion">0%</div>
+          <div class="sub">Free → Pro</div>
+        </div>
+      </div>
+
+      <!-- Revenue Charts -->
+      <div class="charts-row">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Aylık Gelir Trendi
+          </h3>
+          <canvas id="revenueChart" height="120"></canvas>
+        </div>
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            Plana Göre Gelir
+          </h3>
+          <canvas id="planRevenueChart" height="180"></canvas>
+        </div>
+      </div>
+
+      <!-- Payments Table -->
+      <div class="card" style="margin-bottom:20px">
+        <h3 style="display:flex;justify-content:space-between;align-items:center">
+          <span style="display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+            Ödeme Geçmişi
+          </span>
+          <button class="btn btn-green" onclick="document.getElementById('addPaymentForm').style.display = document.getElementById('addPaymentForm').style.display === 'none' ? 'block' : 'none'">
+            + Manuel Ödeme Ekle
+          </button>
+        </h3>
+
+        <!-- Add Payment Form (hidden) -->
+        <div id="addPaymentForm" style="display:none;background:#f8fafc;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #e0e7ef">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">E-posta *</label>
+              <input id="pay-email" type="email" placeholder="kullanici@email.com" style="width:100%;padding:8px 12px;border:1px solid #dde3ea;border-radius:8px;font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Tutar (₺) *</label>
+              <input id="pay-amount" type="number" step="0.01" placeholder="29.00" style="width:100%;padding:8px 12px;border:1px solid #dde3ea;border-radius:8px;font-size:13px">
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Plan *</label>
+              <select id="pay-plan" style="width:100%;padding:8px 12px;border:1px solid #dde3ea;border-radius:8px;font-size:13px">
+                <option value="pro_monthly">Pro Aylık</option>
+                <option value="pro_yearly">Pro Yıllık</option>
+                <option value="enterprise">Enterprise</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Ödeme Türü *</label>
+              <select id="pay-type" style="width:100%;padding:8px 12px;border:1px solid #dde3ea;border-radius:8px;font-size:13px">
+                <option value="subscription">Abonelik</option>
+                <option value="one_time">Tek Seferlik</option>
+                <option value="manual">Manuel</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Sağlayıcı</label>
+              <select id="pay-provider" style="width:100%;padding:8px 12px;border:1px solid #dde3ea;border-radius:8px;font-size:13px">
+                <option value="manual">Manuel</option>
+                <option value="stripe">Stripe</option>
+                <option value="iyzico">iyzico</option>
+                <option value="bank_transfer">Banka Transferi</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:11px;font-weight:600;color:var(--text-muted);display:block;margin-bottom:4px">Not</label>
+              <input id="pay-notes" type="text" placeholder="Opsiyonel not..." style="width:100%;padding:8px 12px;border:1px solid #dde3ea;border-radius:8px;font-size:13px">
+            </div>
+          </div>
+          <button class="btn btn-green" onclick="addManualPayment()" style="padding:8px 24px;font-size:13px">Ödeme Kaydet</button>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tarih</th>
+                <th>Kullanıcı</th>
+                <th>Tutar</th>
+                <th>Plan</th>
+                <th>Tür</th>
+                <th>Sağlayıcı</th>
+                <th>Durum</th>
+                <th>Not</th>
+              </tr>
+            </thead>
+            <tbody id="paymentsTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -325,6 +465,7 @@ async function init() {
     loadDashboard();
     loadUsers();
     loadActivity();
+    loadRevenue();
 
   } catch(e) {
     console.error('Auth check failed:', e);
@@ -355,6 +496,13 @@ async function loadDashboard() {
     document.getElementById('kpi-uploads').textContent = data.activity.uploads_month;
     document.getElementById('kpi-ai').textContent = data.activity.ai_analyses_month;
     document.getElementById('kpi-views').textContent = data.activity.views_today;
+
+    // Revenue KPIs (dashboard)
+    if (data.revenue) {
+      document.getElementById('kpi-month-revenue').textContent = '₺' + (data.revenue.month_revenue || 0).toLocaleString('tr-TR');
+      document.getElementById('kpi-total-revenue').textContent = '₺' + (data.revenue.total_revenue || 0).toLocaleString('tr-TR');
+      document.getElementById('kpi-conversion').textContent = (data.revenue.conversion_rate || 0) + '%';
+    }
 
     // Traffic Chart
     if (charts.traffic) charts.traffic.destroy();
@@ -495,6 +643,142 @@ async function updateUserPlan(userId, plan) {
   } catch(e) {
     console.error('Update error:', e);
     alert('Güncelleme başarısız');
+  }
+}
+
+// ===== LOAD REVENUE =====
+async function loadRevenue() {
+  try {
+    const [statsRes, paymentsRes] = await Promise.all([
+      fetch('/api/admin/stats'),
+      fetch('/api/admin/payments')
+    ]);
+    const stats = await statsRes.json();
+    const paymentsData = await paymentsRes.json();
+
+    const rev = stats.revenue || {};
+
+    // Revenue KPIs
+    document.getElementById('rev-total').textContent = '₺' + (rev.total_revenue || 0).toLocaleString('tr-TR');
+    document.getElementById('rev-month').textContent = '₺' + (rev.month_revenue || 0).toLocaleString('tr-TR');
+    document.getElementById('rev-today').textContent = '₺' + (rev.today_revenue || 0).toLocaleString('tr-TR');
+    document.getElementById('rev-conversion').textContent = (rev.conversion_rate || 0) + '%';
+
+    const payments = paymentsData.payments || [];
+    document.getElementById('rev-count').textContent = payments.length;
+    const totalAmount = payments.reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+    document.getElementById('rev-avg').textContent = payments.length > 0 ? '₺' + (totalAmount / payments.length).toFixed(0) : '₺0';
+
+    // Monthly Revenue Chart
+    if (charts.revenue) charts.revenue.destroy();
+    const monthlyTrend = rev.monthly_trend || [];
+    if (monthlyTrend.length > 0) {
+      const rCtx = document.getElementById('revenueChart').getContext('2d');
+      charts.revenue = new Chart(rCtx, {
+        type: 'bar',
+        data: {
+          labels: monthlyTrend.map(m => m.month),
+          datasets: [{
+            label: 'Gelir (₺)',
+            data: monthlyTrend.map(m => m.total),
+            backgroundColor: '#27AE60',
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { callback: v => '₺' + v } } }
+        }
+      });
+    }
+
+    // Plan Revenue Chart
+    if (charts.planRevenue) charts.planRevenue.destroy();
+    const byPlan = rev.by_plan || [];
+    if (byPlan.length > 0) {
+      const pCtx = document.getElementById('planRevenueChart').getContext('2d');
+      charts.planRevenue = new Chart(pCtx, {
+        type: 'doughnut',
+        data: {
+          labels: byPlan.map(p => p.plan),
+          datasets: [{
+            data: byPlan.map(p => p.total),
+            backgroundColor: ['#2F80ED', '#27AE60', '#E67E22', '#9B59B6']
+          }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } } }
+      });
+    }
+
+    // Payments Table
+    const tbody = document.getElementById('paymentsTable');
+    if (payments.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px">Henüz ödeme kaydı yok</td></tr>';
+    } else {
+      tbody.innerHTML = payments.map(p => {
+        const date = new Date(p.created_at).toLocaleString('tr-TR');
+        const statusBadge = p.status === 'completed' ? '<span class="badge badge-pro">Tamamlandı</span>'
+          : p.status === 'refunded' ? '<span class="badge" style="background:#fde8e8;color:#c0392b">İade</span>'
+          : '<span class="badge badge-trial">' + p.status + '</span>';
+        const planNames = { pro_monthly: 'Pro Aylık', pro_yearly: 'Pro Yıllık', enterprise: 'Enterprise' };
+        const typeNames = { subscription: 'Abonelik', one_time: 'Tek Seferlik', manual: 'Manuel' };
+        return `<tr>
+          <td style="white-space:nowrap">${date}</td>
+          <td>${p.email || '-'}</td>
+          <td style="font-weight:700;color:var(--green)">₺${parseFloat(p.amount).toLocaleString('tr-TR')}</td>
+          <td>${planNames[p.plan] || p.plan}</td>
+          <td>${typeNames[p.payment_type] || p.payment_type}</td>
+          <td>${p.payment_provider || '-'}</td>
+          <td>${statusBadge}</td>
+          <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted);font-size:11px">${p.notes || '-'}</td>
+        </tr>`;
+      }).join('');
+    }
+
+  } catch(e) {
+    console.error('Revenue load error:', e);
+  }
+}
+
+// ===== ADD MANUAL PAYMENT =====
+async function addManualPayment() {
+  const email = document.getElementById('pay-email').value.trim();
+  const amount = document.getElementById('pay-amount').value;
+  const plan = document.getElementById('pay-plan').value;
+  const paymentType = document.getElementById('pay-type').value;
+  const provider = document.getElementById('pay-provider').value;
+  const notes = document.getElementById('pay-notes').value.trim();
+
+  if (!email || !amount) {
+    alert('E-posta ve tutar zorunludur');
+    return;
+  }
+
+  try {
+    const res = await fetch('/api/admin/payments/add', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, amount: parseFloat(amount), plan, payment_type: paymentType, payment_provider: provider, notes })
+    });
+    const data = await res.json();
+
+    if (data.success) {
+      // Clear form
+      document.getElementById('pay-email').value = '';
+      document.getElementById('pay-amount').value = '';
+      document.getElementById('pay-notes').value = '';
+      document.getElementById('addPaymentForm').style.display = 'none';
+
+      // Reload data
+      loadRevenue();
+      loadDashboard();
+    } else {
+      alert('Hata: ' + (data.error || 'Ödeme eklenemedi'));
+    }
+  } catch(e) {
+    console.error('Add payment error:', e);
+    alert('Ödeme eklenirken hata oluştu');
   }
 }
 
