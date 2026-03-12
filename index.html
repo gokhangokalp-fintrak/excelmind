@@ -583,6 +583,24 @@ body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); 
       <div id="pivotChartView" class="pivot-chart-area" style="display:none">
         <canvas id="pivotChart"></canvas>
       </div>
+
+      <!-- Filtered Data Table -->
+      <div id="filteredDataSection" style="margin-top:24px;display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <h4 style="margin:0;font-size:15px;color:var(--blue-dark);display:flex;align-items:center;gap:8px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z"/></svg>
+            Filtrelenmiş Veriler <span id="filteredCount" style="font-weight:400;color:#6B7C93;font-size:13px"></span>
+          </h4>
+          <button class="btn-sm" onclick="downloadFilteredExcel()" style="font-size:12px;padding:6px 12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Excel İndir
+          </button>
+        </div>
+        <div style="overflow-x:auto;max-height:500px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:10px">
+          <table class="pivot-table" id="filteredDataTable" style="font-size:12px"></table>
+        </div>
+        <div id="filteredDataMore" style="text-align:center;padding:10px;color:#6B7C93;font-size:13px"></div>
+      </div>
     </div>
 
     <!-- Health Score -->
@@ -1403,12 +1421,67 @@ function applyPivotFilters() {
 
   const filtered = getFilteredData();
   renderPivotData(filtered);
+  renderFilteredDataTable(filtered);
 }
 
 function resetPivotFilters() {
   pivotState.filterCols.forEach(f => pivotState.selected[f.key].clear());
   renderPivotFilters();
   renderPivotData(parsedData);
+  // Hide filtered data table on reset
+  document.getElementById('filteredDataSection').style.display = 'none';
+}
+
+function renderFilteredDataTable(filteredData) {
+  const section = document.getElementById('filteredDataSection');
+  const hasActiveFilter = pivotState.filterCols.some(f => pivotState.selected[f.key].size > 0);
+
+  if (!hasActiveFilter) {
+    section.style.display = 'none';
+    return;
+  }
+
+  section.style.display = 'block';
+  const maxRows = 100;
+  const showData = filteredData.slice(0, maxRows);
+  const showCols = headers.slice(0, 10);
+
+  document.getElementById('filteredCount').textContent = `(${filteredData.length} satır)`;
+
+  let html = '<thead><tr>' + showCols.map(h => `<th style="position:sticky;top:0;background:var(--blue-dark);color:white;padding:8px 12px;font-size:12px;white-space:nowrap">${h}</th>`).join('');
+  if (headers.length > 10) html += '<th style="position:sticky;top:0;background:var(--blue-dark);color:white;padding:8px">...</th>';
+  html += '</tr></thead><tbody>';
+
+  showData.forEach((row, ri) => {
+    html += `<tr style="background:${ri % 2 === 0 ? '#fff' : '#f8fafc'}">`;
+    showCols.forEach(h => {
+      let v = row[h];
+      if (v instanceof Date) v = v.toLocaleDateString('tr-TR');
+      if (typeof v === 'number') v = v.toLocaleString('tr-TR', {maximumFractionDigits:2});
+      html += `<td style="padding:6px 12px;border-bottom:1px solid #e8edf2;white-space:nowrap">${v ?? ''}</td>`;
+    });
+    if (headers.length > 10) html += '<td style="padding:6px 8px;border-bottom:1px solid #e8edf2">...</td>';
+    html += '</tr>';
+  });
+  html += '</tbody>';
+
+  document.getElementById('filteredDataTable').innerHTML = html;
+  document.getElementById('filteredDataMore').textContent = filteredData.length > maxRows ? `İlk ${maxRows} satır gösteriliyor (toplam ${filteredData.length})` : '';
+}
+
+function downloadFilteredExcel() {
+  const filtered = getFilteredData();
+  if (filtered.length === 0) { alert('Filtrelenmiş veri yok.'); return; }
+  const rows = filtered.map(r => headers.map(h => {
+    let v = r[h];
+    if (v instanceof Date) return v.toLocaleDateString('tr-TR');
+    return v;
+  }));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map(() => ({ wch: 18 }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Filtrelenmiş Veri');
+  XLSX.writeFile(wb, 'ExcelMind_Filtreli_Veri.xlsx');
 }
 
 function renderPivotData(filteredData) {
