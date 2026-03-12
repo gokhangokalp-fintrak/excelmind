@@ -1,0 +1,2053 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ExcelMind — Upload your Excel. Understand your business.</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --blue: #2F80ED; --blue-dark: #1a5276; --blue-light: #eef5ff;
+  --green: #27AE60; --green-light: #eafaf1;
+  --text: #1a2332; --text-light: #6b7c93; --text-muted: #8899aa;
+  --bg: #f0f4f8; --white: #ffffff;
+  --shadow: 0 4px 20px rgba(0,0,0,0.06);
+  --shadow-lg: 0 12px 40px rgba(0,0,0,0.1);
+  --radius: 16px; --radius-sm: 12px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); overflow-x:hidden; }
+
+/* ===== NAVBAR ===== */
+.navbar {
+  background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+  padding: 16px 5%; display:flex; justify-content:space-between; align-items:center;
+  position:sticky; top:0; z-index:100; box-shadow: 0 2px 20px rgba(0,0,0,0.15);
+}
+.nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+.nav-logo-icon { width:36px; height:36px; background:rgba(255,255,255,0.15); border-radius:10px; display:flex; align-items:center; justify-content:center; }
+.nav-logo-icon svg { width:22px; height:22px; }
+.nav-logo-text { font-size:22px; font-weight:800; color:#fff; }
+.nav-logo-text span { color:var(--green); }
+.nav-right { display:flex; gap:12px; align-items:center; }
+.nav-link { color:rgba(255,255,255,0.7); text-decoration:none; font-size:14px; font-weight:500; padding:8px 16px; border-radius:8px; transition:all 0.2s; }
+.nav-link:hover { color:#fff; background:rgba(255,255,255,0.1); }
+
+/* ===== VIEWS ===== */
+.view { display:none; animation: fadeIn 0.5s ease; }
+.view.active { display:block; }
+@keyframes fadeIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+/* ===== LANDING VIEW ===== */
+.landing {
+  background: linear-gradient(135deg, var(--blue-dark) 0%, #2471a3 30%, #2e86c1 50%, var(--blue) 70%, #5dade2 100%);
+  min-height: calc(100vh - 68px); display:flex; align-items:center; justify-content:center; padding:40px 5%;
+  position:relative; overflow:hidden;
+}
+.landing::before { content:''; position:absolute; top:-50%; right:-20%; width:80%; height:200%; background:radial-gradient(ellipse,rgba(255,255,255,0.06) 0%,transparent 70%); }
+
+.landing-inner { max-width:1100px; width:100%; display:grid; grid-template-columns:1fr 1fr; gap:50px; align-items:center; position:relative; z-index:2; }
+.landing-left h1 { font-size:44px; font-weight:800; color:#fff; line-height:1.15; letter-spacing:-1px; margin-bottom:16px; }
+.landing-left h1 .accent { color:var(--green); }
+.landing-left p { font-size:17px; color:rgba(255,255,255,0.8); line-height:1.6; margin-bottom:28px; max-width:440px; }
+
+.steps-row { display:flex; gap:6px; align-items:center; margin-bottom:32px; flex-wrap:wrap; }
+.step-badge { display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.1); padding:10px 14px; border-radius:10px; border:1px solid rgba(255,255,255,0.1); }
+.step-badge svg { width:18px; height:18px; }
+.step-badge span { color:#fff; font-size:12px; font-weight:600; }
+.step-arrow { color:rgba(255,255,255,0.35); font-size:16px; }
+
+.landing-cta { display:flex; gap:14px; flex-wrap:wrap; }
+.btn-primary {
+  background:linear-gradient(135deg,var(--green),#2ecc71); color:#fff; border:none;
+  padding:14px 32px; border-radius:var(--radius-sm); font-size:16px; font-weight:700;
+  cursor:pointer; transition:all 0.3s; box-shadow:0 4px 20px rgba(39,174,96,0.4);
+  display:flex; align-items:center; gap:8px;
+}
+.btn-primary:hover { transform:translateY(-2px); box-shadow:0 6px 30px rgba(39,174,96,0.5); }
+.btn-primary svg { width:20px; height:20px; }
+
+/* Upload Card */
+.upload-card {
+  background:rgba(255,255,255,0.97); border-radius:20px; padding:36px;
+  box-shadow:var(--shadow-lg); width:100%; max-width:400px; margin:0 auto;
+}
+.upload-card h3 { font-size:18px; font-weight:700; text-align:center; margin-bottom:4px; }
+.upload-card .sub { font-size:13px; color:var(--text-light); text-align:center; margin-bottom:24px; }
+
+.dropzone {
+  border:2px dashed #c8d6e5; border-radius:var(--radius); padding:32px 16px;
+  text-align:center; cursor:pointer; transition:all 0.3s; background:#f8fafc; margin-bottom:16px;
+}
+.dropzone:hover { border-color:var(--blue); background:var(--blue-light); }
+.dropzone.drag-over { border-color:var(--green); background:var(--green-light); transform:scale(1.01); }
+.dropzone-icon {
+  width:52px; height:52px; background:linear-gradient(135deg,var(--green),#2ecc71);
+  border-radius:14px; display:flex; align-items:center; justify-content:center; margin:0 auto 12px;
+}
+.dropzone-icon svg { width:26px; height:26px; }
+.dropzone h4 { font-size:15px; font-weight:600; margin-bottom:4px; }
+.dropzone p { font-size:12px; color:var(--text-muted); }
+.formats { display:flex; gap:6px; justify-content:center; margin-top:10px; }
+.format-tag { background:var(--blue-light); color:var(--blue); padding:3px 8px; border-radius:5px; font-size:10px; font-weight:600; }
+
+.upload-btn {
+  width:100%; background:linear-gradient(135deg,var(--green),#2ecc71); color:#fff;
+  border:none; padding:13px; border-radius:var(--radius-sm); font-size:15px; font-weight:700;
+  cursor:pointer; transition:all 0.3s; box-shadow:0 4px 15px rgba(39,174,96,0.3);
+}
+.upload-btn:hover { transform:translateY(-1px); }
+.upload-btn:disabled { opacity:0.5; cursor:not-allowed; transform:none; }
+
+.upload-badges { display:flex; justify-content:center; gap:16px; margin-top:16px; }
+.upload-badge { display:flex; align-items:center; gap:5px; font-size:11px; color:var(--text-light); font-weight:500; }
+.upload-badge svg { width:14px; height:14px; color:var(--green); }
+
+/* ===== LOADING VIEW ===== */
+.loading-view { min-height:calc(100vh - 68px); display:flex; align-items:center; justify-content:center; flex-direction:column; gap:24px; }
+.loader { width:60px; height:60px; border:4px solid #e0e7ef; border-top-color:var(--blue); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+.loading-text { font-size:18px; font-weight:600; color:var(--text); }
+.loading-sub { font-size:14px; color:var(--text-light); }
+.progress-bar { width:300px; height:6px; background:#e0e7ef; border-radius:3px; overflow:hidden; }
+.progress-fill { height:100%; background:linear-gradient(90deg,var(--blue),var(--green)); border-radius:3px; transition:width 0.3s; }
+
+/* ===== CLASSIFY VIEW ===== */
+.classify-view { min-height:calc(100vh - 68px); display:flex; align-items:center; justify-content:center; padding:40px 5%; }
+.classify-card { background:var(--white); border-radius:20px; padding:40px; max-width:600px; width:100%; box-shadow:var(--shadow-lg); text-align:center; }
+.classify-card h2 { font-size:24px; font-weight:800; margin-bottom:8px; }
+.classify-card .detected { font-size:14px; color:var(--text-light); margin-bottom:28px; }
+.classify-card .detected strong { color:var(--blue); font-weight:700; }
+
+.type-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:28px; }
+.type-option {
+  background:#f8fafc; border:2px solid #e0e7ef; border-radius:var(--radius-sm); padding:16px 12px;
+  cursor:pointer; transition:all 0.2s; text-align:center;
+}
+.type-option:hover { border-color:var(--blue); background:var(--blue-light); }
+.type-option.selected { border-color:var(--blue); background:var(--blue-light); box-shadow:0 0 0 3px rgba(47,128,237,0.15); }
+.type-option .type-icon { font-size:28px; margin-bottom:8px; }
+.type-option .type-name { font-size:13px; font-weight:600; color:var(--text); }
+
+.classify-btn {
+  background:linear-gradient(135deg,var(--blue),#2e86c1); color:#fff; border:none;
+  padding:14px 40px; border-radius:var(--radius-sm); font-size:16px; font-weight:700;
+  cursor:pointer; transition:all 0.3s; box-shadow:0 4px 20px rgba(47,128,237,0.3);
+}
+.classify-btn:hover { transform:translateY(-2px); }
+
+/* ===== DASHBOARD VIEW ===== */
+.dashboard { padding:24px 5%; max-width:1280px; margin:0 auto; }
+
+.dash-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; flex-wrap:wrap; gap:12px; }
+.dash-header h2 { font-size:24px; font-weight:800; }
+.dash-header h2 span { color:var(--blue); }
+.dash-actions { display:flex; gap:10px; }
+.btn-outline {
+  background:var(--white); color:var(--blue); border:2px solid var(--blue);
+  padding:10px 20px; border-radius:var(--radius-sm); font-size:13px; font-weight:600;
+  cursor:pointer; transition:all 0.2s; display:flex; align-items:center; gap:6px;
+}
+.btn-outline:hover { background:var(--blue-light); }
+.btn-outline svg { width:16px; height:16px; }
+.btn-sm {
+  background:linear-gradient(135deg,var(--green),#2ecc71); color:#fff; border:none;
+  padding:10px 20px; border-radius:var(--radius-sm); font-size:13px; font-weight:600;
+  cursor:pointer; display:flex; align-items:center; gap:6px;
+}
+.btn-sm svg { width:16px; height:16px; }
+
+/* Data Summary Bar */
+.data-summary {
+  background:var(--white); border-radius:var(--radius); padding:16px 24px; margin-bottom:20px;
+  display:flex; gap:24px; flex-wrap:wrap; align-items:center; box-shadow:var(--shadow); border:1px solid #e8edf2;
+}
+.data-summary-item { display:flex; align-items:center; gap:8px; }
+.data-summary-item .label { font-size:12px; color:var(--text-muted); font-weight:500; }
+.data-summary-item .value { font-size:14px; color:var(--text); font-weight:700; }
+.data-type-badge { background:var(--blue-light); color:var(--blue); padding:6px 14px; border-radius:20px; font-size:12px; font-weight:700; }
+
+/* KPI Cards */
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:16px; margin-bottom:24px; }
+.kpi-card {
+  background:var(--white); border-radius:var(--radius); padding:24px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2; transition:all 0.2s;
+}
+.kpi-card:hover { transform:translateY(-2px); box-shadow:var(--shadow-lg); }
+.kpi-label { font-size:12px; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; }
+.kpi-value { font-size:28px; font-weight:800; color:var(--text); margin-bottom:4px; }
+.kpi-sub { font-size:12px; color:var(--text-light); }
+.kpi-card.highlight { border-left:4px solid var(--blue); }
+.kpi-card.highlight-green { border-left:4px solid var(--green); }
+
+/* Charts */
+.charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
+.chart-card {
+  background:var(--white); border-radius:var(--radius); padding:24px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2;
+}
+.chart-card h3 { font-size:15px; font-weight:700; margin-bottom:16px; color:var(--text); }
+.chart-card canvas { width:100%!important; max-height:280px; }
+
+/* Insights */
+.insights-section { margin-bottom:24px; }
+.insights-section h3 { font-size:18px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+.insights-section h3 svg { width:22px; height:22px; color:var(--blue); }
+.insight-list { display:flex; flex-direction:column; gap:10px; }
+.insight-item {
+  background:var(--white); border-radius:var(--radius-sm); padding:16px 20px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2; display:flex; align-items:flex-start; gap:12px;
+  font-size:14px; line-height:1.6; color:var(--text);
+}
+.insight-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; font-size:16px; }
+.insight-icon.up { background:#eafaf1; }
+.insight-icon.warn { background:#fef5e7; }
+.insight-icon.info { background:var(--blue-light); }
+
+/* Health Score */
+.health-card {
+  background: linear-gradient(135deg, var(--blue-dark), var(--blue));
+  border-radius:var(--radius); padding:32px; color:#fff; text-align:center;
+  margin-bottom:24px; box-shadow:var(--shadow-lg);
+}
+.health-card h3 { font-size:16px; font-weight:600; opacity:0.8; margin-bottom:16px; }
+.health-score { font-size:64px; font-weight:800; margin-bottom:4px; }
+.health-label { font-size:14px; opacity:0.7; }
+.health-bars { display:flex; justify-content:center; gap:24px; margin-top:20px; flex-wrap:wrap; }
+.health-bar-item { text-align:center; }
+.health-bar-item .hb-label { font-size:11px; opacity:0.7; margin-bottom:6px; }
+.health-bar-item .hb-track { width:80px; height:6px; background:rgba(255,255,255,0.2); border-radius:3px; overflow:hidden; }
+.health-bar-item .hb-fill { height:100%; border-radius:3px; }
+
+/* Data Table Preview */
+.table-card {
+  background:var(--white); border-radius:var(--radius); padding:24px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2; margin-bottom:24px; overflow-x:auto;
+}
+.table-card h3 { font-size:15px; font-weight:700; margin-bottom:16px; }
+.data-table { width:100%; border-collapse:collapse; font-size:13px; }
+.data-table th { background:#f8fafc; color:var(--text-light); font-weight:600; text-align:left; padding:10px 12px; border-bottom:2px solid #e0e7ef; white-space:nowrap; }
+.data-table td { padding:10px 12px; border-bottom:1px solid #f0f2f5; color:var(--text); }
+.data-table tr:hover td { background:#fafbfc; }
+
+/* Cleaning alerts */
+.clean-alert {
+  background:#fff8e1; border:1px solid #ffe082; border-radius:var(--radius-sm);
+  padding:14px 20px; margin-bottom:12px; display:flex; align-items:center; gap:10px;
+  font-size:13px; color:#7b6b1a;
+}
+.clean-alert svg { width:18px; height:18px; color:#f9a825; flex-shrink:0; }
+
+/* Watermark */
+.watermark {
+  text-align:center; padding:20px; font-size:12px; color:var(--text-muted);
+  border-top:1px solid #e8edf2; margin-top:32px;
+}
+.watermark a { color:var(--blue); text-decoration:none; font-weight:600; }
+
+/* ===== PIVOT TABLE ===== */
+.pivot-section {
+  background:var(--white); border-radius:var(--radius); padding:28px;
+  box-shadow:var(--shadow); border:1px solid #e8edf2; margin-bottom:24px;
+}
+.pivot-section h3 {
+  font-size:18px; font-weight:700; margin-bottom:20px; display:flex; align-items:center; gap:10px;
+}
+.pivot-section h3 svg { width:22px; height:22px; color:var(--blue); }
+.pivot-desc { font-size:13px; color:var(--text-light); margin-top:-12px; margin-bottom:20px; }
+
+/* Filter Bar */
+.pivot-filters {
+  display:flex; gap:12px; flex-wrap:wrap; margin-bottom:20px;
+  padding:16px; background:#f8fafc; border-radius:var(--radius-sm); border:1px solid #e8edf2;
+  align-items:flex-end;
+}
+.filter-group { display:flex; flex-direction:column; gap:6px; min-width:180px; flex:1; position:relative; }
+.filter-group label { font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; }
+
+/* Custom dropdown with checkboxes */
+.filter-dropdown-btn {
+  padding:10px 12px; border:1px solid #d0d5dd; border-radius:8px; font-size:13px;
+  font-family:'Inter',sans-serif; color:var(--text); background:#fff; cursor:pointer;
+  transition: all 0.2s; display:flex; justify-content:space-between; align-items:center;
+  min-height:42px; user-select:none;
+}
+.filter-dropdown-btn:hover { border-color:var(--blue); }
+.filter-dropdown-btn.open { border-color:var(--blue); box-shadow:0 0 0 3px rgba(47,128,237,0.1); }
+.filter-dropdown-btn .dd-text { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; flex:1; }
+.filter-dropdown-btn .dd-arrow { font-size:10px; color:var(--text-muted); margin-left:8px; transition:transform 0.2s; }
+.filter-dropdown-btn.open .dd-arrow { transform:rotate(180deg); }
+.filter-dropdown-btn .dd-count {
+  background:var(--blue); color:#fff; font-size:10px; font-weight:700;
+  padding:2px 7px; border-radius:10px; margin-left:6px; min-width:20px; text-align:center;
+}
+
+.filter-dropdown-list {
+  display:none; position:absolute; top:100%; left:0; right:0; z-index:50;
+  background:#fff; border:1px solid #d0d5dd; border-radius:8px; margin-top:4px;
+  max-height:220px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.12);
+}
+.filter-dropdown-list.show { display:block; }
+.filter-dropdown-list .dd-search {
+  padding:8px 10px; border-bottom:1px solid #f0f2f5; position:sticky; top:0; background:#fff; z-index:1;
+}
+.filter-dropdown-list .dd-search input {
+  width:100%; padding:6px 10px; border:1px solid #e0e7ef; border-radius:6px; font-size:12px;
+  font-family:'Inter',sans-serif; outline:none;
+}
+.filter-dropdown-list .dd-search input:focus { border-color:var(--blue); }
+.dd-option {
+  padding:8px 12px; display:flex; align-items:center; gap:8px; cursor:pointer;
+  font-size:12px; color:var(--text); transition:background 0.1s;
+}
+.dd-option:hover { background:#f8fafc; }
+.dd-option input[type="checkbox"] { accent-color:var(--blue); width:15px; height:15px; cursor:pointer; }
+.dd-option.checked { background:var(--blue-light); font-weight:600; }
+.dd-select-all { border-bottom:1px solid #f0f2f5; font-weight:600; color:var(--blue); }
+
+.filter-actions { display:flex; align-items:flex-end; gap:8px; }
+.filter-btn {
+  padding:10px 20px; border-radius:8px; font-size:13px; font-weight:600;
+  cursor:pointer; transition:all 0.2s; border:none; white-space:nowrap; height:42px;
+}
+.filter-btn.apply { background:var(--blue); color:#fff; }
+.filter-btn.apply:hover { background:#1a6ed8; }
+.filter-btn.reset { background:#f0f2f5; color:var(--text-light); border:1px solid #d0d5dd; }
+.filter-btn.reset:hover { background:#e8edf2; }
+.active-filters { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; }
+.active-filter-tag {
+  background:var(--blue-light); color:var(--blue); padding:4px 10px; border-radius:16px;
+  font-size:11px; font-weight:600; display:flex; align-items:center; gap:4px;
+}
+.active-filter-tag .remove-tag { cursor:pointer; font-size:14px; line-height:1; opacity:0.6; }
+.active-filter-tag .remove-tag:hover { opacity:1; }
+
+/* Pivot Summary Cards */
+.pivot-summary {
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr));
+  gap:12px; margin-bottom:20px;
+}
+.pivot-sum-card {
+  background:linear-gradient(135deg, #f8fafc, #fff); border:1px solid #e8edf2;
+  border-radius:var(--radius-sm); padding:16px; text-align:center;
+}
+.pivot-sum-card .ps-label { font-size:11px; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:6px; }
+.pivot-sum-card .ps-value { font-size:22px; font-weight:800; color:var(--text); }
+.pivot-sum-card .ps-sub { font-size:11px; color:var(--text-light); margin-top:2px; }
+
+/* Pivot View Toggle */
+.pivot-view-toggle { display:flex; gap:4px; margin-bottom:16px; background:#f0f2f5; padding:3px; border-radius:10px; width:fit-content; }
+.pivot-view-btn {
+  padding:8px 16px; border-radius:8px; font-size:12px; font-weight:600;
+  cursor:pointer; border:none; background:transparent; color:var(--text-light); transition:all 0.2s;
+}
+.pivot-view-btn.active { background:#fff; color:var(--text); box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+
+/* Pivot Table */
+.pivot-table-wrap { overflow-x:auto; max-height:500px; overflow-y:auto; border:1px solid #e8edf2; border-radius:var(--radius-sm); }
+.pivot-table { width:100%; border-collapse:collapse; font-size:13px; }
+.pivot-table th {
+  background:linear-gradient(180deg, #f8fafc, #f0f2f5); color:var(--text-light);
+  font-weight:700; text-align:left; padding:12px 14px; border-bottom:2px solid #d0d5dd;
+  white-space:nowrap; position:sticky; top:0; z-index:2; cursor:pointer; user-select:none;
+}
+.pivot-table th:hover { background:#e8edf2; }
+.pivot-table th .sort-icon { margin-left:4px; font-size:10px; opacity:0.5; }
+.pivot-table th.sorted .sort-icon { opacity:1; color:var(--blue); }
+.pivot-table td { padding:10px 14px; border-bottom:1px solid #f0f2f5; }
+.pivot-table tr:hover td { background:#fafbfc; }
+.pivot-table tr:nth-child(even) td { background:#fcfcfd; }
+.pivot-table tr:nth-child(even):hover td { background:#f5f7fa; }
+.pivot-table .num-cell { text-align:right; font-variant-numeric:tabular-nums; font-weight:500; }
+.pivot-table .total-row td { background:#f0f4f8!important; font-weight:700; border-top:2px solid #d0d5dd; }
+.pivot-table .highlight-cell { color:var(--green); font-weight:700; }
+.pivot-table .low-cell { color:#e74c3c; }
+
+/* Pivot Chart */
+.pivot-chart-area { margin-top:20px; }
+.pivot-chart-area canvas { max-height:320px; }
+
+/* Responsive */
+@media(max-width:768px) {
+  .landing-inner { grid-template-columns:1fr; text-align:center; }
+  .landing-left p { margin:0 auto 28px; }
+  .steps-row { justify-content:center; }
+  .landing-cta { justify-content:center; }
+  .charts-grid { grid-template-columns:1fr; }
+  .type-grid { grid-template-columns:repeat(2,1fr); }
+  .landing-left h1 { font-size:32px; }
+  .kpi-grid { grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <a href="#" class="nav-logo" onclick="showView('landing')">
+    <div class="nav-logo-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M3 9h18M3 15h18M9 3v18"/></svg></div>
+    <div class="nav-logo-text">Excel<span>Mind</span></div>
+  </a>
+  <div class="nav-right">
+    <a href="#" class="nav-link" onclick="showView('landing')">Ana Sayfa</a>
+    <a href="#" class="nav-link" id="dashLink" style="display:none" onclick="showView('dashboard')">Dashboard</a>
+  </div>
+</nav>
+
+<!-- ===== LANDING VIEW ===== -->
+<div id="view-landing" class="view active">
+  <section class="landing">
+    <div class="landing-inner">
+      <div class="landing-left">
+        <h1>Upload your Excel.<br><span class="accent">Understand</span> your business.</h1>
+        <p>Excel veya CSV dosyanızı yükleyin, AI saniyeler içinde analiz etsin. Grafikler, içgörüler ve raporlar anında elinizde.</p>
+        <div class="steps-row">
+          <div class="step-badge"><svg viewBox="0 0 24 24" fill="none" stroke="#27AE60" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg><span>Upload</span></div>
+          <span class="step-arrow">›</span>
+          <div class="step-badge"><svg viewBox="0 0 24 24" fill="none" stroke="#5dade2" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span>AI Analyzes</span></div>
+          <span class="step-arrow">›</span>
+          <div class="step-badge"><svg viewBox="0 0 24 24" fill="none" stroke="#9b59b6" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span>Dashboard</span></div>
+        </div>
+        <div class="landing-cta">
+          <button class="btn-primary" onclick="document.getElementById('fileInput').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+            Upload Excel File
+          </button>
+        </div>
+        <p style="color:rgba(255,255,255,0.45);font-size:12px;margin-top:10px;">Hesap oluşturmadan anında analiz. Ücretsiz deneyin.</p>
+      </div>
+      <div>
+        <div class="upload-card">
+          <h3>Hemen Başlayın</h3>
+          <p class="sub">Dosyanızı yükleyin, AI gerisini halletsin</p>
+          <div class="dropzone" id="dropzone">
+            <div class="dropzone-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg></div>
+            <h4>Drag & Drop your file</h4>
+            <p>veya tıklayarak dosya seçin</p>
+            <div class="formats">
+              <span class="format-tag">.XLSX</span>
+              <span class="format-tag">.XLS</span>
+              <span class="format-tag">.CSV</span>
+            </div>
+          </div>
+          <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">Upload Excel File</button>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none">
+          <div class="upload-badges">
+            <div class="upload-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Quick</div>
+            <div class="upload-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Smart</div>
+            <div class="upload-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Insightful</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ===== LOADING VIEW ===== -->
+<div id="view-loading" class="view">
+  <div class="loading-view">
+    <div class="loader"></div>
+    <div class="loading-text">Veriniz analiz ediliyor...</div>
+    <div class="loading-sub" id="loadingStatus">Dosya okunuyor...</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+</div>
+
+<!-- ===== CLASSIFY VIEW ===== -->
+<div id="view-classify" class="view">
+  <div class="classify-view">
+    <div class="classify-card">
+      <h2>Verinizi Tanımlayalım</h2>
+      <p class="detected">AI tahminimiz: <strong id="detectedType">Satış Raporu</strong></p>
+      <div class="type-grid" id="typeGrid">
+        <div class="type-option" data-type="sales" onclick="selectType(this)">
+          <div class="type-icon">📊</div>
+          <div class="type-name">Satış Raporu</div>
+        </div>
+        <div class="type-option" data-type="inventory" onclick="selectType(this)">
+          <div class="type-icon">📦</div>
+          <div class="type-name">Envanter / Stok</div>
+        </div>
+        <div class="type-option" data-type="finance" onclick="selectType(this)">
+          <div class="type-icon">💰</div>
+          <div class="type-name">Gelir-Gider</div>
+        </div>
+        <div class="type-option" data-type="cashflow" onclick="selectType(this)">
+          <div class="type-icon">🏦</div>
+          <div class="type-name">Cash Flow</div>
+        </div>
+        <div class="type-option" data-type="hr" onclick="selectType(this)">
+          <div class="type-icon">👥</div>
+          <div class="type-name">HR Raporu</div>
+        </div>
+        <div class="type-option" data-type="bank" onclick="selectType(this)">
+          <div class="type-icon">🏧</div>
+          <div class="type-name">Banka Hareketleri</div>
+        </div>
+        <div class="type-option" data-type="customers" onclick="selectType(this)">
+          <div class="type-icon">🧑‍💼</div>
+          <div class="type-name">Müşteri Listesi</div>
+        </div>
+        <div class="type-option" data-type="ecommerce" onclick="selectType(this)">
+          <div class="type-icon">🛒</div>
+          <div class="type-name">E-Ticaret</div>
+        </div>
+        <div class="type-option" data-type="general" onclick="selectType(this)">
+          <div class="type-icon">📋</div>
+          <div class="type-name">Genel Analiz</div>
+        </div>
+      </div>
+      <button class="classify-btn" onclick="confirmType()">Dashboard Oluştur →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== DASHBOARD VIEW ===== -->
+<div id="view-dashboard" class="view">
+  <div class="dashboard" id="dashboardContent">
+    <div class="dash-header">
+      <h2>📊 <span id="dashTitle">Dashboard</span></h2>
+      <div class="dash-actions">
+        <button class="btn-outline" onclick="showView('landing')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Yeni Dosya
+        </button>
+        <button class="btn-sm" onclick="downloadPDF()" style="background:linear-gradient(135deg,#e74c3c,#c0392b)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>
+          PDF İndir
+        </button>
+        <button class="btn-sm" onclick="downloadExcelReport()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+          Excel İndir
+        </button>
+        <button class="btn-sm" onclick="downloadSmartExcel()" style="background:linear-gradient(135deg,#1a5276,#2F80ED)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2"/></svg>
+          Akıllı Excel ★
+        </button>
+      </div>
+    </div>
+
+    <!-- Data Summary -->
+    <div class="data-summary" id="dataSummary"></div>
+
+    <!-- Cleaning Alerts -->
+    <div id="cleanAlerts"></div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- Charts -->
+    <div class="charts-grid" id="chartsGrid">
+      <div class="chart-card"><h3 id="chart1Title">Trend</h3><canvas id="chart1"></canvas></div>
+      <div class="chart-card"><h3 id="chart2Title">Dağılım</h3><canvas id="chart2"></canvas></div>
+    </div>
+
+    <!-- ===== DYNAMIC PIVOT TABLE ===== -->
+    <div class="pivot-section" id="pivotSection">
+      <h3>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 3v18"/></svg>
+        Dinamik Veri Tablosu
+      </h3>
+      <p class="pivot-desc">Pivot Table, VLOOKUP, SUMIF gibi formüllere gerek yok — filtreleri kullanın, verileriniz anında özetlensin.</p>
+
+      <!-- Filters -->
+      <div class="pivot-filters" id="pivotFilters"></div>
+
+      <!-- Summary Cards -->
+      <div class="pivot-summary" id="pivotSummary"></div>
+
+      <!-- View Toggle + Export -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+        <div class="pivot-view-toggle" style="margin-bottom:0">
+          <button class="pivot-view-btn active" data-view="table" onclick="switchPivotView('table',this)">Tablo</button>
+          <button class="pivot-view-btn" data-view="chart" onclick="switchPivotView('chart',this)">Grafik</button>
+        </div>
+        <button class="btn-sm" onclick="downloadPivotExcel()" style="font-size:12px;padding:8px 14px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+          Tabloyu Excel İndir
+        </button>
+      </div>
+
+      <!-- Pivot Table -->
+      <div id="pivotTableView">
+        <div class="pivot-table-wrap">
+          <table class="pivot-table" id="pivotTable"></table>
+        </div>
+      </div>
+
+      <!-- Pivot Chart -->
+      <div id="pivotChartView" class="pivot-chart-area" style="display:none">
+        <canvas id="pivotChart"></canvas>
+      </div>
+    </div>
+
+    <!-- Health Score -->
+    <div class="health-card" id="healthCard"></div>
+
+    <!-- AI Insights -->
+    <div class="insights-section">
+      <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg> AI Insights</h3>
+      <div class="insight-list" id="insightList"></div>
+    </div>
+
+    <!-- Data Table Preview -->
+    <div class="table-card">
+      <h3>Veri Önizleme (İlk 10 satır)</h3>
+      <table class="data-table" id="dataTable"></table>
+    </div>
+
+    <!-- Watermark -->
+    <div class="watermark">Powered by <a href="#">ExcelMind AI</a> — Upload your Excel. Understand your business.</div>
+  </div>
+</div>
+
+<script>
+// ===== GLOBAL STATE =====
+let parsedData = null;
+let selectedType = null;
+let headers = [];
+let chartInstances = [];
+
+// ===== VIEW MANAGEMENT =====
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + name).classList.add('active');
+  document.getElementById('dashLink').style.display = name === 'dashboard' ? 'inline' : 'none';
+}
+
+// ===== FILE HANDLING =====
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e => { if (e.target.files.length) handleFile(e.target.files[0]); });
+
+function handleFile(file) {
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['xlsx','xls','csv'].includes(ext)) { alert('Lütfen .xlsx, .xls veya .csv dosyası yükleyin.'); return; }
+
+  // Store original file for backend API
+  uploadedFile = file;
+
+  showView('loading');
+  updateProgress(10, 'Dosya okunuyor...');
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      updateProgress(30, 'Veriler ayrıştırılıyor...');
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+      if (json.length === 0) { alert('Dosyada veri bulunamadı.'); showView('landing'); return; }
+
+      headers = Object.keys(json[0]);
+      parsedData = json;
+
+      updateProgress(60, 'AI veri türünü tanımlıyor...');
+      setTimeout(() => {
+        updateProgress(80, 'Sınıflandırma tamamlanıyor...');
+        const detected = detectDataType(headers, json);
+        selectedType = detected;
+
+        // Update classify view
+        document.getElementById('detectedType').textContent = getTypeName(detected);
+        document.querySelectorAll('.type-option').forEach(opt => {
+          opt.classList.toggle('selected', opt.dataset.type === detected);
+        });
+
+        setTimeout(() => {
+          updateProgress(100, 'Hazır!');
+          setTimeout(() => showView('classify'), 300);
+        }, 400);
+      }, 800);
+    } catch(err) {
+      alert('Dosya okunamadı: ' + err.message);
+      showView('landing');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function updateProgress(pct, text) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('loadingStatus').textContent = text;
+}
+
+// ===== DATA TYPE DETECTION =====
+function detectDataType(headers, data) {
+  const h = headers.map(x => x.toLowerCase().replace(/[_\-\s]/g, ''));
+  const all = h.join(' ');
+
+  // Also scan first 30 rows of DATA VALUES for keywords (catches cases where "Gelir"/"Gider" are values, not headers)
+  const sampleValues = data.slice(0, 30).flatMap(r => headers.map(col => String(r[col] || '').toLowerCase())).join(' ');
+  const allWithData = all + ' ' + sampleValues;
+
+  // Sales keywords (must have BOTH value + product/customer columns)
+  if (/sati[sş]|sale|revenue|ciro|fatura|invoice/i.test(all) && /ürün|urun|product|müşteri|musteri|customer|adet|quantity/i.test(all)) return 'sales';
+  // E-commerce
+  if (/sipari[sş]|order|sku|marketplace|trendyol|amazon|hepsiburada|shopify/i.test(all)) return 'ecommerce';
+  // Inventory
+  if (/stok|stock|envanter|inventory|depo|warehouse|miktar/i.test(all)) return 'inventory';
+  // Bank
+  if (/banka|bank|hesap|account|iban|havale|eft|virman/i.test(all)) return 'bank';
+  // Finance (Gelir-Gider) — check headers AND data values, BEFORE cashflow
+  if (/gelir|gider|expense|income|maliyet|cost|kâr|kar|profit|zarar|loss|bütçe|butce|budget/i.test(allWithData)) return 'finance';
+  // Cash flow — specific keywords only
+  if (/nakit|cash|flow|tahsilat|borç|borc|alacak/i.test(all)) return 'cashflow';
+  // "ödeme" alone without gelir/gider in data → cashflow
+  if (/ödeme|odeme/i.test(all) && !/gelir|gider/i.test(allWithData)) return 'cashflow';
+  // HR
+  if (/çalışan|calisan|employee|maaş|maas|salary|departman|department|pozisyon|position/i.test(all)) return 'hr';
+  // Customer
+  if (/müşteri|musteri|customer|client|firma|company|telefon|phone|email|adres|address/i.test(all)) return 'customers';
+
+  // Check for numeric columns
+  const numCols = headers.filter(h => data.slice(0,20).some(r => typeof r[h] === 'number'));
+  if (numCols.length >= 2) return 'sales';
+
+  return 'general';
+}
+
+function getTypeName(type) {
+  const names = {
+    sales: 'Satış Raporu', inventory: 'Envanter / Stok Analizi', finance: 'Gelir-Gider Raporu',
+    cashflow: 'Cash Flow Analizi', hr: 'HR Raporu', bank: 'Banka Hareketleri',
+    customers: 'Müşteri Listesi', ecommerce: 'E-Ticaret Raporu', general: 'Genel Veri Analizi'
+  };
+  return names[type] || 'Genel Veri Analizi';
+}
+
+function selectType(el) {
+  document.querySelectorAll('.type-option').forEach(o => o.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedType = el.dataset.type;
+}
+
+function confirmType() {
+  showView('loading');
+  updateProgress(0, 'Dashboard hazırlanıyor...');
+
+  let step = 0;
+  const steps = ['Metrikler hesaplanıyor...', 'Grafikler oluşturuluyor...', 'AI içgörüler üretiliyor...', 'Dashboard tamamlanıyor...'];
+  const interval = setInterval(() => {
+    step++;
+    if (step < steps.length) {
+      updateProgress(25 * step, steps[step]);
+    } else {
+      clearInterval(interval);
+      updateProgress(100, 'Hazır!');
+      setTimeout(() => {
+        buildDashboard();
+        showView('dashboard');
+      }, 400);
+    }
+  }, 600);
+}
+
+// ===== DASHBOARD BUILDER =====
+function buildDashboard() {
+  // Destroy old charts
+  chartInstances.forEach(c => c.destroy());
+  chartInstances = [];
+
+  document.getElementById('dashTitle').textContent = getTypeName(selectedType);
+
+  // Data summary
+  const cleanIssues = detectCleaningIssues();
+  buildDataSummary(cleanIssues);
+  buildCleanAlerts(cleanIssues);
+
+  // Build type-specific dashboard
+  const analysis = analyzeData();
+  buildKPIs(analysis);
+  buildCharts(analysis);
+  buildPivotTable(analysis);
+  buildHealthScore(analysis);
+  buildInsights(analysis);
+  buildDataTable();
+}
+
+function analyzeData() {
+  const data = parsedData;
+  const numericCols = headers.filter(h => data.slice(0,50).filter(r => typeof r[h] === 'number' && !isNaN(r[h])).length > data.slice(0,50).length * 0.5);
+  const dateCols = headers.filter(h => data.slice(0,20).some(r => r[h] instanceof Date || /^\d{4}[-\/]\d{2}[-\/]\d{2}/.test(String(r[h]))));
+  const textCols = headers.filter(h => !numericCols.includes(h) && !dateCols.includes(h));
+
+  // Main numeric column — prefer columns with transaction keywords, avoid "balance" type columns
+  let mainNumCol = numericCols[0];
+  if (numericCols.length > 1) {
+    const valueKeywords = ['tutar', 'toplam', 'fiyat', 'maaş', 'maas', 'amount', 'total', 'gelir', 'gider', 'satış', 'satis', 'revenue', 'price', 'maliyet', 'cost', 'prim', 'ücret', 'ucret'];
+    const avoidKeywords = ['bakiye', 'balance', 'sıra', 'no', 'id', 'numara'];
+
+    // First try keyword match
+    const keywordMatch = numericCols.find(c => valueKeywords.some(kw => c.toLowerCase().includes(kw)));
+    if (keywordMatch) {
+      mainNumCol = keywordMatch;
+    } else {
+      // Fall back to highest variance (not highest average — avoids running balances)
+      const stats = numericCols.filter(c => !avoidKeywords.some(kw => c.toLowerCase().includes(kw))).map(c => {
+        const vals = data.map(r => Number(r[c]) || 0);
+        const avg = vals.reduce((a,b) => a+b, 0) / vals.length;
+        const variance = vals.reduce((a,v) => a + (v-avg)**2, 0) / vals.length;
+        return { col: c, avg, variance, cv: avg !== 0 ? Math.sqrt(variance) / Math.abs(avg) : 0 };
+      });
+      // Higher coefficient of variation = more likely a transaction amount (not a running total)
+      mainNumCol = stats.sort((a,b) => b.cv - a.cv)[0]?.col || numericCols[0];
+    }
+  }
+
+  // Category column (most repeated text values)
+  let catCol = textCols[0];
+  if (textCols.length > 1) {
+    const uniqueCounts = textCols.map(c => {
+      const unique = new Set(data.map(r => String(r[c]).trim()).filter(Boolean));
+      return { col: c, count: unique.size, ratio: unique.size / data.length };
+    });
+    catCol = uniqueCounts.filter(x => x.count > 1 && x.count < data.length * 0.8).sort((a,b) => a.count - b.count)[0]?.col || textCols[0];
+  }
+
+  // Calculations
+  const numValues = data.map(r => Number(r[mainNumCol]) || 0);
+  const total = numValues.reduce((a,b) => a+b, 0);
+  const avg = total / numValues.length;
+  const max = Math.max(...numValues);
+  const min = Math.min(...numValues.filter(v => v > 0));
+
+  // Category breakdown
+  const catBreakdown = {};
+  if (catCol) {
+    data.forEach(r => {
+      const key = String(r[catCol] || 'Diğer').trim();
+      if (!key) return;
+      if (!catBreakdown[key]) catBreakdown[key] = { count: 0, total: 0 };
+      catBreakdown[key].count++;
+      catBreakdown[key].total += Number(r[mainNumCol]) || 0;
+    });
+  }
+
+  const sorted = Object.entries(catBreakdown).sort((a,b) => b[1].total - a[1].total);
+  const top5 = sorted.slice(0, 5);
+  const topItem = sorted[0];
+
+  // Time series (if date column exists)
+  let timeSeries = [];
+  if (dateCols.length > 0) {
+    const dateCol = dateCols[0];
+    const monthly = {};
+    data.forEach(r => {
+      let d = r[dateCol];
+      if (typeof d === 'string') d = new Date(d);
+      if (d instanceof Date && !isNaN(d)) {
+        const key = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+        if (!monthly[key]) monthly[key] = 0;
+        monthly[key] += Number(r[mainNumCol]) || 0;
+      }
+    });
+    timeSeries = Object.entries(monthly).sort((a,b) => a[0].localeCompare(b[0]));
+  }
+
+  // Second numeric for secondary chart
+  let secNumCol = numericCols.find(c => c !== mainNumCol);
+
+  return { numericCols, dateCols, textCols, mainNumCol, catCol, secNumCol, total, avg, max, min, catBreakdown, sorted, top5, topItem, timeSeries, numValues };
+}
+
+// ===== DATA CLEANING =====
+function detectCleaningIssues() {
+  const issues = [];
+  const data = parsedData;
+
+  // Empty cells
+  let emptyCells = 0;
+  data.forEach(row => headers.forEach(h => { if (row[h] === '' || row[h] === null || row[h] === undefined) emptyCells++; }));
+  if (emptyCells > 0) issues.push({ type: 'empty', msg: `${emptyCells} boş hücre tespit edildi.`, severity: emptyCells > data.length ? 'warn' : 'info' });
+
+  // Duplicate rows
+  const seen = new Set();
+  let dupes = 0;
+  data.forEach(row => {
+    const key = JSON.stringify(row);
+    if (seen.has(key)) dupes++;
+    seen.add(key);
+  });
+  if (dupes > 0) issues.push({ type: 'duplicate', msg: `${dupes} tekrar eden satır bulundu.`, severity: 'warn' });
+
+  return issues;
+}
+
+function buildDataSummary(issues) {
+  const html = `
+    <div class="data-summary-item"><span class="label">Satır</span><span class="value">${parsedData.length.toLocaleString()}</span></div>
+    <div class="data-summary-item"><span class="label">Sütun</span><span class="value">${headers.length}</span></div>
+    <div class="data-summary-item"><span class="label">Veri Tipi</span><span class="data-type-badge">${getTypeName(selectedType)}</span></div>
+    ${issues.length > 0 ? `<div class="data-summary-item"><span class="label">Uyarı</span><span class="value" style="color:#e67e22">${issues.length} sorun</span></div>` : '<div class="data-summary-item"><span class="label">Durum</span><span class="value" style="color:#27AE60">Temiz ✓</span></div>'}
+  `;
+  document.getElementById('dataSummary').innerHTML = html;
+}
+
+function buildCleanAlerts(issues) {
+  const html = issues.map(i => `
+    <div class="clean-alert">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01"/></svg>
+      ${i.msg}
+    </div>
+  `).join('');
+  document.getElementById('cleanAlerts').innerHTML = html;
+}
+
+// ===== KPIs =====
+function buildKPIs(a) {
+  const fmt = v => {
+    if (Math.abs(v) >= 1000000) return (v/1000000).toFixed(1) + 'M';
+    if (Math.abs(v) >= 1000) return (v/1000).toFixed(1) + 'K';
+    return v.toLocaleString(undefined, {maximumFractionDigits:1});
+  };
+
+  let kpis = [];
+
+  switch(selectedType) {
+    case 'sales': case 'ecommerce':
+      kpis = [
+        { label: 'Toplam Satış', value: fmt(a.total), sub: a.mainNumCol, hl: 'highlight' },
+        { label: 'İşlem Sayısı', value: parsedData.length.toLocaleString(), sub: 'toplam satır', hl: '' },
+        { label: 'Ortalama', value: fmt(a.avg), sub: 'işlem başına', hl: '' },
+        { label: 'En Yüksek', value: fmt(a.max), sub: a.topItem ? a.topItem[0] : '', hl: 'highlight-green' },
+      ];
+      break;
+    case 'inventory':
+      kpis = [
+        { label: 'Toplam Ürün', value: parsedData.length.toLocaleString(), sub: 'kayıt', hl: 'highlight' },
+        { label: 'Toplam Değer', value: fmt(a.total), sub: a.mainNumCol, hl: '' },
+        { label: 'Ort. Birim Değer', value: fmt(a.avg), sub: 'birim başına', hl: '' },
+        { label: 'Kategori', value: Object.keys(a.catBreakdown).length, sub: 'farklı grup', hl: 'highlight-green' },
+      ];
+      break;
+    case 'finance': case 'cashflow':
+      kpis = [
+        { label: 'Toplam Tutar', value: fmt(a.total), sub: a.mainNumCol, hl: 'highlight' },
+        { label: 'Kayıt Sayısı', value: parsedData.length.toLocaleString(), sub: 'hareket', hl: '' },
+        { label: 'Ortalama', value: fmt(a.avg), sub: 'hareket başına', hl: '' },
+        { label: 'Maks. Hareket', value: fmt(a.max), sub: 'en büyük', hl: 'highlight-green' },
+      ];
+      break;
+    case 'bank':
+      kpis = [
+        { label: 'Toplam İşlem', value: parsedData.length.toLocaleString(), sub: 'hareket', hl: 'highlight' },
+        { label: 'Toplam Tutar', value: fmt(a.total), sub: a.mainNumCol, hl: '' },
+        { label: 'Ort. İşlem', value: fmt(a.avg), sub: 'hareket başına', hl: '' },
+        { label: 'Kategori', value: Object.keys(a.catBreakdown).length, sub: 'farklı sınıf', hl: 'highlight-green' },
+      ];
+      break;
+    case 'hr':
+      kpis = [
+        { label: 'Çalışan Sayısı', value: parsedData.length.toLocaleString(), sub: 'kişi', hl: 'highlight' },
+        { label: 'Toplam Maliyet', value: fmt(a.total), sub: a.mainNumCol, hl: '' },
+        { label: 'Ortalama', value: fmt(a.avg), sub: 'kişi başına', hl: '' },
+        { label: 'Departman', value: Object.keys(a.catBreakdown).length, sub: 'farklı birim', hl: 'highlight-green' },
+      ];
+      break;
+    default:
+      kpis = [
+        { label: 'Toplam', value: fmt(a.total), sub: a.mainNumCol || '', hl: 'highlight' },
+        { label: 'Kayıt', value: parsedData.length.toLocaleString(), sub: 'satır', hl: '' },
+        { label: 'Ortalama', value: fmt(a.avg), sub: 'satır başına', hl: '' },
+        { label: 'Maksimum', value: fmt(a.max), sub: '', hl: 'highlight-green' },
+      ];
+  }
+
+  document.getElementById('kpiGrid').innerHTML = kpis.map(k => `
+    <div class="kpi-card ${k.hl}">
+      <div class="kpi-label">${k.label}</div>
+      <div class="kpi-value">${k.value}</div>
+      <div class="kpi-sub">${k.sub}</div>
+    </div>
+  `).join('');
+}
+
+// ===== CHARTS =====
+function buildCharts(a) {
+  const colors = ['#2F80ED','#27AE60','#9b59b6','#e67e22','#e74c3c','#1abc9c','#f39c12','#3498db'];
+  const bgColors = colors.map(c => c + '33');
+
+  // Chart 1: Time series or Top categories bar
+  const ctx1 = document.getElementById('chart1').getContext('2d');
+  if (a.timeSeries.length >= 2) {
+    document.getElementById('chart1Title').textContent = 'Aylık Trend';
+    chartInstances.push(new Chart(ctx1, {
+      type: 'line',
+      data: {
+        labels: a.timeSeries.map(t => t[0]),
+        datasets: [{ label: a.mainNumCol || 'Değer', data: a.timeSeries.map(t => t[1]), borderColor: '#2F80ED', backgroundColor: 'rgba(47,128,237,0.1)', fill: true, tension: 0.4, pointRadius: 4, pointBackgroundColor: '#2F80ED' }]
+      },
+      options: { responsive:true, plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true, ticks:{callback:v=>v>=1000?(v/1000)+'K':v}} } }
+    }));
+  } else {
+    document.getElementById('chart1Title').textContent = 'Top 5 — ' + (a.catCol || 'Kategori');
+    chartInstances.push(new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: a.top5.map(t => t[0].length > 20 ? t[0].slice(0,20)+'...' : t[0]),
+        datasets: [{ label: a.mainNumCol || 'Değer', data: a.top5.map(t => t[1].total), backgroundColor: colors.slice(0,5), borderRadius: 8 }]
+      },
+      options: { responsive:true, indexAxis:'horizontal', plugins:{legend:{display:false}}, scales:{ y:{beginAtZero:true, ticks:{callback:v=>v>=1000?(v/1000)+'K':v}} } }
+    }));
+  }
+
+  // Chart 2: Pie / Doughnut for distribution
+  const ctx2 = document.getElementById('chart2').getContext('2d');
+  document.getElementById('chart2Title').textContent = (a.catCol || 'Kategori') + ' Dağılımı';
+  const pieData = a.top5.length > 0 ? a.top5 : Object.entries(a.catBreakdown).slice(0,6);
+  const otherTotal = a.sorted.slice(5).reduce((s,e) => s + e[1].total, 0);
+  const pieLabels = pieData.map(t => t[0].length > 18 ? t[0].slice(0,18)+'...' : t[0]);
+  const pieValues = pieData.map(t => t[1].total);
+  if (otherTotal > 0) { pieLabels.push('Diğer'); pieValues.push(otherTotal); }
+
+  chartInstances.push(new Chart(ctx2, {
+    type: 'doughnut',
+    data: {
+      labels: pieLabels,
+      datasets: [{ data: pieValues, backgroundColor: colors.slice(0, pieLabels.length), borderWidth: 2, borderColor: '#fff' }]
+    },
+    options: { responsive:true, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, padding:8, font:{size:11} } } } }
+  }));
+}
+
+// ===== HEALTH SCORE =====
+function buildHealthScore(a) {
+  // Calculate component scores
+  const dataQuality = Math.max(20, 100 - (detectCleaningIssues().length * 15));
+  const diversity = Math.min(100, Object.keys(a.catBreakdown).length * 12);
+  const volumeScore = Math.min(100, Math.log10(parsedData.length + 1) * 35);
+
+  // Concentration risk
+  let concentration = 50;
+  if (a.topItem && a.total > 0) {
+    const topPct = (a.topItem[1].total / a.total) * 100;
+    concentration = topPct > 50 ? 30 : topPct > 30 ? 55 : 80;
+  }
+
+  const overall = Math.round((dataQuality * 0.25 + diversity * 0.25 + volumeScore * 0.25 + concentration * 0.25));
+  const label = overall >= 75 ? 'Sağlıklı' : overall >= 50 ? 'Orta' : 'Dikkat Gerekli';
+
+  document.getElementById('healthCard').innerHTML = `
+    <h3>Business Health Score</h3>
+    <div class="health-score">${overall}<span style="font-size:24px;opacity:0.6"> / 100</span></div>
+    <div class="health-label">${label}</div>
+    <div class="health-bars">
+      <div class="health-bar-item"><div class="hb-label">Veri Kalitesi</div><div class="hb-track"><div class="hb-fill" style="width:${dataQuality}%;background:#27AE60"></div></div></div>
+      <div class="health-bar-item"><div class="hb-label">Çeşitlilik</div><div class="hb-track"><div class="hb-fill" style="width:${diversity}%;background:#2F80ED"></div></div></div>
+      <div class="health-bar-item"><div class="hb-label">Veri Hacmi</div><div class="hb-track"><div class="hb-fill" style="width:${volumeScore}%;background:#f39c12"></div></div></div>
+      <div class="health-bar-item"><div class="hb-label">Risk Skoru</div><div class="hb-track"><div class="hb-fill" style="width:${concentration}%;background:${concentration<50?'#e74c3c':'#27AE60'}"></div></div></div>
+    </div>
+  `;
+}
+
+// ===== AI INSIGHTS =====
+function buildInsights(a) {
+  const insights = [];
+  const fmt = v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(1)+'K' : v.toLocaleString(undefined,{maximumFractionDigits:1});
+
+  // Top performer
+  if (a.topItem) {
+    const pct = ((a.topItem[1].total / a.total) * 100).toFixed(1);
+    insights.push({ icon: '📈', type: 'up', text: `En yüksek performans: <strong>${a.topItem[0]}</strong> toplam değerin <strong>%${pct}</strong>'ini oluşturuyor (${fmt(a.topItem[1].total)}).` });
+  }
+
+  // Concentration risk
+  if (a.topItem && a.total > 0) {
+    const topPct = (a.topItem[1].total / a.total) * 100;
+    if (topPct > 35) {
+      insights.push({ icon: '⚠️', type: 'warn', text: `<strong>${a.topItem[0]}</strong> tek başına gelirin %${topPct.toFixed(0)}'ini oluşturuyor. Bu yoğunlaşma riski yaratabilir — çeşitlendirme önerilir.` });
+    }
+  }
+
+  // Trend
+  if (a.timeSeries.length >= 3) {
+    const last = a.timeSeries[a.timeSeries.length - 1][1];
+    const prev = a.timeSeries[a.timeSeries.length - 2][1];
+    const change = ((last - prev) / prev * 100).toFixed(1);
+    const dir = change > 0 ? 'artış' : 'azalış';
+    insights.push({ icon: change > 0 ? '🚀' : '📉', type: change > 0 ? 'up' : 'warn', text: `Son dönemde <strong>%${Math.abs(change)} ${dir}</strong> gözlemlendi (${a.timeSeries[a.timeSeries.length-2][0]} → ${a.timeSeries[a.timeSeries.length-1][0]}).` });
+  }
+
+  // Bottom performers
+  if (a.sorted.length >= 5) {
+    const bottom = a.sorted.slice(-2);
+    insights.push({ icon: '💡', type: 'info', text: `En düşük performans: <strong>${bottom.map(b=>b[0]).join(', ')}</strong>. Bu alanları geliştirmek veya optimize etmek faydalı olabilir.` });
+  }
+
+  // Data volume
+  insights.push({ icon: '📊', type: 'info', text: `Toplam <strong>${parsedData.length.toLocaleString()}</strong> satır ve <strong>${headers.length}</strong> sütun analiz edildi. ${a.numericCols.length} sayısal, ${a.textCols.length} metin kolonu tespit edildi.` });
+
+  // Average insight
+  if (a.avg > 0) {
+    const aboveAvg = a.numValues.filter(v => v > a.avg).length;
+    const pct = ((aboveAvg / a.numValues.length) * 100).toFixed(0);
+    insights.push({ icon: '📋', type: 'info', text: `Ortalama değer: <strong>${fmt(a.avg)}</strong>. Kayıtların <strong>%${pct}</strong>'i ortalamanın üzerinde.` });
+  }
+
+  document.getElementById('insightList').innerHTML = insights.map(i => `
+    <div class="insight-item">
+      <div class="insight-icon ${i.type}">${i.icon}</div>
+      <div>${i.text}</div>
+    </div>
+  `).join('');
+}
+
+// ===== DATA TABLE =====
+function buildDataTable() {
+  const preview = parsedData.slice(0, 10);
+  const showCols = headers.slice(0, 8);
+  let html = '<thead><tr>' + showCols.map(h => `<th>${h}</th>`).join('') + (headers.length > 8 ? '<th>...</th>' : '') + '</tr></thead><tbody>';
+  preview.forEach(row => {
+    html += '<tr>' + showCols.map(h => {
+      let v = row[h];
+      if (v instanceof Date) v = v.toLocaleDateString('tr-TR');
+      if (typeof v === 'number') v = v.toLocaleString('tr-TR', {maximumFractionDigits:2});
+      return `<td>${v ?? ''}</td>`;
+    }).join('') + (headers.length > 8 ? '<td>...</td>' : '') + '</tr>';
+  });
+  html += '</tbody>';
+  document.getElementById('dataTable').innerHTML = html;
+}
+
+// ===== DYNAMIC PIVOT TABLE =====
+let pivotChartInstance = null;
+let pivotState = { selected: {}, sortCol: null, sortDir: 'desc', view: 'table', filterCols: [], analysis: null, dependencies: {} };
+
+function buildPivotTable(analysis) {
+  const data = parsedData;
+  const a = analysis;
+
+  // Identify filter columns
+  const filterCols = [];
+
+  // Date → Month filter
+  if (a.dateCols.length > 0) {
+    const dateCol = a.dateCols[0];
+    const months = new Set();
+    data.forEach(r => {
+      let d = r[dateCol];
+      if (typeof d === 'string') d = new Date(d);
+      if (d instanceof Date && !isNaN(d)) {
+        const monthNames = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+        months.add(d.getFullYear() + ' ' + monthNames[d.getMonth()]);
+      }
+    });
+    if (months.size > 1) {
+      filterCols.push({ key: '__month__', label: 'Ay', values: [...months].sort(), type: 'month', sourceCol: dateCol });
+    }
+  }
+
+  // Text columns as filters (sanitize key for DOM IDs)
+  a.textCols.forEach(col => {
+    const unique = [...new Set(data.map(r => String(r[col] || '').trim()).filter(Boolean))].sort();
+    if (unique.length >= 2 && unique.length <= 200) {
+      const safeKey = 'f_' + col.replace(/[^a-zA-Z0-9_çğıöşüÇĞİÖŞÜ]/g, '_');
+      filterCols.push({ key: safeKey, origCol: col, label: col, values: unique, type: 'text', allValues: unique });
+    }
+  });
+
+  // Detect dependencies: if a column has fewer unique values, it might be a "category" that groups another column
+  // Simple heuristic: find category→product-like relationships
+  const deps = {};
+  for (let i = 0; i < filterCols.length; i++) {
+    for (let j = 0; j < filterCols.length; j++) {
+      if (i === j || filterCols[i].type === 'month' || filterCols[j].type === 'month') continue;
+      const parent = filterCols[i];
+      const child = filterCols[j];
+      if (parent.values.length < child.values.length && parent.values.length <= 20) {
+        // Check if parent groups child
+        const parentToChildren = {};
+        data.forEach(r => {
+          const pv = String(r[parent.origCol || parent.key] || '').trim();
+          const cv = String(r[child.origCol || child.key] || '').trim();
+          if (pv && cv) {
+            if (!parentToChildren[pv]) parentToChildren[pv] = new Set();
+            parentToChildren[pv].add(cv);
+          }
+        });
+        // If every child belongs to at most a few parents, it's a dependency
+        const avgChildren = Object.values(parentToChildren).reduce((s,set) => s + set.size, 0) / Object.keys(parentToChildren).length;
+        if (avgChildren < child.values.length * 0.8) {
+          deps[child.key] = { parentKey: parent.key, map: {} };
+          Object.entries(parentToChildren).forEach(([pk, cset]) => {
+            deps[child.key].map[pk] = [...cset].sort();
+          });
+        }
+      }
+    }
+  }
+
+  // Limit to max 5 filters
+  const filters = filterCols.slice(0, 5);
+
+  // Initialize selected state
+  const selected = {};
+  filters.forEach(f => selected[f.key] = new Set());
+
+  pivotState = { selected, sortCol: null, sortDir: 'desc', view: 'table', filterCols: filters, analysis, dependencies: deps };
+
+  renderPivotFilters();
+  renderPivotData(data);
+}
+
+function renderPivotFilters() {
+  const { filterCols, selected, dependencies } = pivotState;
+
+  let html = '';
+  filterCols.forEach(f => {
+    const sel = selected[f.key];
+    const count = sel.size;
+
+    // If this filter is dependent on a parent, show only relevant options
+    let availableValues = f.values;
+    if (dependencies[f.key]) {
+      const parentSel = selected[dependencies[f.key].parentKey];
+      if (parentSel && parentSel.size > 0) {
+        const allowed = new Set();
+        parentSel.forEach(pv => {
+          (dependencies[f.key].map[pv] || []).forEach(cv => allowed.add(cv));
+        });
+        availableValues = f.values.filter(v => allowed.has(v));
+      }
+    }
+
+    const displayText = count === 0 ? 'Tümü' : count <= 2 ? [...sel].join(', ') : `${count} seçili`;
+
+    html += `
+      <div class="filter-group">
+        <label>${f.label}</label>
+        <div class="filter-dropdown-btn" id="ddbtn_${f.key}" onclick="toggleDropdown('${f.key}')">
+          <span class="dd-text">${displayText}</span>
+          ${count > 0 ? `<span class="dd-count">${count}</span>` : ''}
+          <span class="dd-arrow">▼</span>
+        </div>
+        <div class="filter-dropdown-list" id="ddlist_${f.key}">
+          <div class="dd-search"><input type="text" placeholder="Ara..." oninput="filterDropdownSearch('${f.key}', this.value)"></div>
+          <div class="dd-option dd-select-all" onclick="toggleSelectAll('${f.key}')">
+            <input type="checkbox" ${count === availableValues.length && count > 0 ? 'checked' : ''} readonly> Tümünü Seç / Kaldır
+          </div>
+          ${availableValues.map(v => {
+            const escaped = v.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+            return `<div class="dd-option ${sel.has(v) ? 'checked' : ''}" data-value="${v.replace(/"/g, '&quot;')}" onclick="toggleFilterOption('${f.key}', this.dataset.value, this)">
+              <input type="checkbox" ${sel.has(v) ? 'checked' : ''} readonly> ${v}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  });
+
+  html += `
+    <div class="filter-actions">
+      <button class="filter-btn apply" onclick="applyPivotFilters()">Filtrele</button>
+      <button class="filter-btn reset" onclick="resetPivotFilters()">Temizle</button>
+    </div>
+  `;
+
+  document.getElementById('pivotFilters').innerHTML = html;
+}
+
+function toggleDropdown(key) {
+  const list = document.getElementById('ddlist_' + key);
+  const btn = document.getElementById('ddbtn_' + key);
+  const isOpen = list.classList.contains('show');
+
+  // Close all dropdowns first
+  document.querySelectorAll('.filter-dropdown-list').forEach(l => l.classList.remove('show'));
+  document.querySelectorAll('.filter-dropdown-btn').forEach(b => b.classList.remove('open'));
+
+  if (!isOpen) {
+    list.classList.add('show');
+    btn.classList.add('open');
+    const searchInput = list.querySelector('input[type="text"]');
+    if (searchInput) setTimeout(() => searchInput.focus(), 50);
+  }
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.filter-group')) {
+    document.querySelectorAll('.filter-dropdown-list').forEach(l => l.classList.remove('show'));
+    document.querySelectorAll('.filter-dropdown-btn').forEach(b => b.classList.remove('open'));
+  }
+});
+
+function filterDropdownSearch(key, term) {
+  const list = document.getElementById('ddlist_' + key);
+  const options = list.querySelectorAll('.dd-option:not(.dd-select-all)');
+  const lower = term.toLowerCase();
+  options.forEach(opt => {
+    const val = opt.dataset.value || '';
+    opt.style.display = val.toLowerCase().includes(lower) ? '' : 'none';
+  });
+}
+
+function toggleFilterOption(key, value, el) {
+  const sel = pivotState.selected[key];
+  if (sel.has(value)) {
+    sel.delete(value);
+    el.classList.remove('checked');
+    el.querySelector('input').checked = false;
+  } else {
+    sel.add(value);
+    el.classList.add('checked');
+    el.querySelector('input').checked = true;
+  }
+
+  // Update button text
+  updateDropdownBtn(key);
+
+  // If this is a parent of a dependent filter, update the child filter options
+  Object.entries(pivotState.dependencies).forEach(([childKey, dep]) => {
+    if (dep.parentKey === key) {
+      // Clear child selections that are no longer valid
+      if (sel.size > 0) {
+        const allowed = new Set();
+        sel.forEach(pv => (dep.map[pv] || []).forEach(cv => allowed.add(cv)));
+        const childSel = pivotState.selected[childKey];
+        [...childSel].forEach(cv => { if (!allowed.has(cv)) childSel.delete(cv); });
+      }
+      // Re-render filters to update child options
+      renderPivotFilters();
+    }
+  });
+}
+
+function toggleSelectAll(key) {
+  const list = document.getElementById('ddlist_' + key);
+  const options = list.querySelectorAll('.dd-option:not(.dd-select-all)');
+  const sel = pivotState.selected[key];
+  const visibleValues = [...options].filter(o => o.style.display !== 'none').map(o => o.dataset.value);
+
+  const allSelected = visibleValues.every(v => sel.has(v));
+  if (allSelected) {
+    visibleValues.forEach(v => sel.delete(v));
+  } else {
+    visibleValues.forEach(v => sel.add(v));
+  }
+
+  // Update UI
+  options.forEach(opt => {
+    const v = opt.dataset.value;
+    const isChecked = sel.has(v);
+    opt.classList.toggle('checked', isChecked);
+    opt.querySelector('input').checked = isChecked;
+  });
+
+  updateDropdownBtn(key);
+}
+
+function updateDropdownBtn(key) {
+  const sel = pivotState.selected[key];
+  const btn = document.getElementById('ddbtn_' + key);
+  if (!btn) return;
+  const count = sel.size;
+  const text = count === 0 ? 'Tümü' : count <= 2 ? [...sel].join(', ') : `${count} seçili`;
+  btn.querySelector('.dd-text').textContent = text;
+  const countEl = btn.querySelector('.dd-count');
+  if (count > 0) {
+    if (countEl) countEl.textContent = count;
+    else btn.insertAdjacentHTML('beforeend', `<span class="dd-count">${count}</span>`);
+  } else {
+    if (countEl) countEl.remove();
+  }
+}
+
+function getFilteredData() {
+  let filtered = [...parsedData];
+  const monthNames = ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+
+  pivotState.filterCols.forEach(f => {
+    const sel = pivotState.selected[f.key];
+    if (!sel || sel.size === 0) return;
+
+    if (f.type === 'month') {
+      filtered = filtered.filter(r => {
+        let d = r[f.sourceCol];
+        if (typeof d === 'string') d = new Date(d);
+        if (d instanceof Date && !isNaN(d)) {
+          const label = d.getFullYear() + ' ' + monthNames[d.getMonth()];
+          return sel.has(label);
+        }
+        return false;
+      });
+    } else {
+      const colName = f.origCol || f.key;
+      filtered = filtered.filter(r => sel.has(String(r[colName] || '').trim()));
+    }
+  });
+
+  return filtered;
+}
+
+function applyPivotFilters() {
+  // Close all dropdowns
+  document.querySelectorAll('.filter-dropdown-list').forEach(l => l.classList.remove('show'));
+  document.querySelectorAll('.filter-dropdown-btn').forEach(b => b.classList.remove('open'));
+
+  const filtered = getFilteredData();
+  renderPivotData(filtered);
+}
+
+function resetPivotFilters() {
+  pivotState.filterCols.forEach(f => pivotState.selected[f.key].clear());
+  renderPivotFilters();
+  renderPivotData(parsedData);
+}
+
+function renderPivotData(filteredData) {
+  const a = pivotState.analysis;
+  const mainNum = a.mainNumCol;
+  const catCol = a.catCol;
+  const secNum = a.secNumCol;
+
+  // Build aggregated pivot data
+  const groups = {};
+  filteredData.forEach(r => {
+    const key = catCol ? String(r[catCol] || 'Diğer').trim() : 'Toplam';
+    if (!groups[key]) groups[key] = { count: 0, total: 0, secTotal: 0, values: [] };
+    const val = Number(r[mainNum]) || 0;
+    groups[key].count++;
+    groups[key].total += val;
+    if (secNum) groups[key].secTotal += Number(r[secNum]) || 0;
+    groups[key].values.push(val);
+  });
+
+  Object.values(groups).forEach(g => {
+    g.avg = g.count > 0 ? g.total / g.count : 0;
+    g.max = g.values.length > 0 ? Math.max(...g.values) : 0;
+  });
+
+  let rows = Object.entries(groups).map(([name, g]) => ({
+    name, count: g.count, total: g.total, avg: g.avg, max: g.max, secTotal: g.secTotal
+  }));
+
+  // Sort
+  if (pivotState.sortCol) {
+    const col = pivotState.sortCol;
+    const dir = pivotState.sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      if (col === 'name') return a.name.localeCompare(b.name) * dir;
+      return ((a[col] || 0) - (b[col] || 0)) * dir;
+    });
+  } else {
+    rows.sort((a, b) => b.total - a.total);
+  }
+
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+  const grandCount = rows.reduce((s, r) => s + r.count, 0);
+  const grandAvg = grandCount > 0 ? grandTotal / grandCount : 0;
+
+  const fmt = v => {
+    if (Math.abs(v) >= 1000000) return (v/1000000).toFixed(1) + 'M';
+    if (Math.abs(v) >= 1000) return (v/1000).toFixed(1) + 'K';
+    return v.toLocaleString('tr-TR', {maximumFractionDigits:1});
+  };
+
+  // Summary cards
+  const activeFilters = pivotState.filterCols.filter(f => pivotState.selected[f.key].size > 0);
+  const filterInfo = activeFilters.length > 0
+    ? `<div class="pivot-sum-card"><div class="ps-label">Aktif Filtre</div><div class="ps-value">${activeFilters.length}</div><div class="ps-sub">${filteredData.length} / ${parsedData.length} satır</div></div>`
+    : `<div class="pivot-sum-card"><div class="ps-label">Filtre</div><div class="ps-value">Yok</div><div class="ps-sub">tüm veri</div></div>`;
+
+  document.getElementById('pivotSummary').innerHTML = `
+    <div class="pivot-sum-card"><div class="ps-label">Toplam</div><div class="ps-value">${fmt(grandTotal)}</div><div class="ps-sub">${mainNum}</div></div>
+    <div class="pivot-sum-card"><div class="ps-label">İşlem</div><div class="ps-value">${grandCount.toLocaleString('tr-TR')}</div><div class="ps-sub">satır</div></div>
+    <div class="pivot-sum-card"><div class="ps-label">Ortalama</div><div class="ps-value">${fmt(grandAvg)}</div><div class="ps-sub">işlem başına</div></div>
+    ${filterInfo}
+  `;
+
+  // Render table
+  const maxTotal = rows.length > 0 ? Math.max(...rows.map(r => r.total)) : 0;
+  const sortIcon = (col) => {
+    if (pivotState.sortCol === col) return pivotState.sortDir === 'asc' ? ' ▲' : ' ▼';
+    return ' ↕';
+  };
+
+  let tableHTML = `<thead><tr>
+    <th onclick="sortPivot('name')">${catCol || 'Kategori'}<span class="sort-icon">${sortIcon('name')}</span></th>
+    <th onclick="sortPivot('count')">İşlem Sayısı<span class="sort-icon">${sortIcon('count')}</span></th>
+    <th onclick="sortPivot('total')">Toplam ${mainNum}<span class="sort-icon">${sortIcon('total')}</span></th>
+    <th onclick="sortPivot('avg')">Ortalama<span class="sort-icon">${sortIcon('avg')}</span></th>
+    <th>Pay %</th>
+    ${secNum ? `<th onclick="sortPivot('secTotal')">Toplam ${secNum}<span class="sort-icon">${sortIcon('secTotal')}</span></th>` : ''}
+  </tr></thead><tbody>`;
+
+  rows.forEach(r => {
+    const pct = grandTotal > 0 ? ((r.total / grandTotal) * 100).toFixed(1) : 0;
+    const isTop = r.total === maxTotal && rows.length > 1;
+    const isLow = r.total < grandAvg * 0.3 && rows.length > 2;
+
+    tableHTML += `<tr>
+      <td><strong>${r.name}</strong></td>
+      <td class="num-cell">${r.count.toLocaleString('tr-TR')}</td>
+      <td class="num-cell ${isTop ? 'highlight-cell' : ''} ${isLow ? 'low-cell' : ''}">${fmt(r.total)}</td>
+      <td class="num-cell">${fmt(r.avg)}</td>
+      <td class="num-cell">
+        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end">
+          <div style="width:60px;height:6px;background:#e8edf2;border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:${isTop?'var(--green)':'var(--blue)'};border-radius:3px"></div>
+          </div>
+          <span style="min-width:40px;text-align:right">%${pct}</span>
+        </div>
+      </td>
+      ${secNum ? `<td class="num-cell">${fmt(r.secTotal)}</td>` : ''}
+    </tr>`;
+  });
+
+  tableHTML += `<tr class="total-row">
+    <td><strong>TOPLAM</strong></td>
+    <td class="num-cell">${grandCount.toLocaleString('tr-TR')}</td>
+    <td class="num-cell">${fmt(grandTotal)}</td>
+    <td class="num-cell">${fmt(grandAvg)}</td>
+    <td class="num-cell">%100</td>
+    ${secNum ? `<td class="num-cell">${fmt(rows.reduce((s,r) => s+r.secTotal, 0))}</td>` : ''}
+  </tr></tbody>`;
+
+  document.getElementById('pivotTable').innerHTML = tableHTML;
+
+  // Always update the chart (even if hidden)
+  renderPivotChart(rows, mainNum, catCol);
+}
+
+function sortPivot(col) {
+  if (pivotState.sortCol === col) {
+    pivotState.sortDir = pivotState.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    pivotState.sortCol = col;
+    pivotState.sortDir = 'desc';
+  }
+  const filtered = getFilteredData();
+  renderPivotData(filtered);
+}
+
+function renderPivotChart(rows, mainNum, catCol) {
+  // Destroy previous chart
+  if (pivotChartInstance) {
+    pivotChartInstance.destroy();
+    pivotChartInstance = null;
+  }
+
+  const canvas = document.getElementById('pivotChart');
+  if (!canvas) return;
+
+  // Reset canvas to fix rendering issues
+  const parent = canvas.parentNode;
+  const newCanvas = document.createElement('canvas');
+  newCanvas.id = 'pivotChart';
+  parent.replaceChild(newCanvas, canvas);
+
+  if (rows.length === 0) return;
+
+  const top10 = rows.slice(0, 10);
+  const colors = ['#2F80ED','#27AE60','#9b59b6','#e67e22','#e74c3c','#1abc9c','#f39c12','#3498db','#2ecc71','#8e44ad'];
+
+  pivotChartInstance = new Chart(newCanvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: top10.map(r => r.name.length > 22 ? r.name.slice(0,22)+'...' : r.name),
+      datasets: [{
+        label: mainNum || 'Değer',
+        data: top10.map(r => r.total),
+        backgroundColor: colors.slice(0, top10.length).map(c => c + 'CC'),
+        borderColor: colors.slice(0, top10.length),
+        borderWidth: 1,
+        borderRadius: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { callback: v => v >= 1000000 ? (v/1000000).toFixed(1)+'M' : v >= 1000 ? (v/1000).toFixed(0)+'K' : v } },
+        x: { ticks: { maxRotation: 45 } }
+      }
+    }
+  });
+}
+
+function switchPivotView(view, btn) {
+  document.querySelectorAll('.pivot-view-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const tableDiv = document.getElementById('pivotTableView');
+  const chartDiv = document.getElementById('pivotChartView');
+  tableDiv.style.display = view === 'table' ? 'block' : 'none';
+  chartDiv.style.display = view === 'chart' ? 'block' : 'none';
+  pivotState.view = view;
+
+  // Re-render chart when switching to chart view to ensure proper sizing
+  if (view === 'chart' && pivotState.analysis) {
+    const filtered = getFilteredData();
+    const a = pivotState.analysis;
+    const mainNum = a.mainNumCol;
+    const catCol = a.catCol;
+
+    // Rebuild rows for chart
+    const groups = {};
+    filtered.forEach(r => {
+      const key = catCol ? String(r[catCol] || 'Diğer').trim() : 'Toplam';
+      if (!groups[key]) groups[key] = { count: 0, total: 0 };
+      groups[key].count++;
+      groups[key].total += Number(r[mainNum]) || 0;
+    });
+    let rows = Object.entries(groups).map(([name, g]) => ({ name, total: g.total, count: g.count }));
+    rows.sort((a, b) => b.total - a.total);
+    renderPivotChart(rows, mainNum, catCol);
+  }
+}
+
+// ===== EXCEL DOWNLOAD =====
+
+function downloadPivotExcel() {
+  const a = pivotState.analysis;
+  if (!a) return;
+
+  const filtered = getFilteredData();
+  const mainNum = a.mainNumCol;
+  const catCol = a.catCol;
+  const secNum = a.secNumCol;
+
+  // Build aggregated data
+  const groups = {};
+  filtered.forEach(r => {
+    const key = catCol ? String(r[catCol] || 'Diğer').trim() : 'Toplam';
+    if (!groups[key]) groups[key] = { count: 0, total: 0, secTotal: 0 };
+    groups[key].count++;
+    groups[key].total += Number(r[mainNum]) || 0;
+    if (secNum) groups[key].secTotal += Number(r[secNum]) || 0;
+  });
+
+  let rows = Object.entries(groups).map(([name, g]) => ({
+    name, count: g.count, total: g.total, avg: g.count > 0 ? g.total / g.count : 0, secTotal: g.secTotal
+  }));
+  rows.sort((a, b) => b.total - a.total);
+
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0);
+  const grandCount = rows.reduce((s, r) => s + r.count, 0);
+
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Pivot Summary
+  const pivotHeaders = [catCol || 'Kategori', 'İşlem Sayısı', `Toplam ${mainNum}`, 'Ortalama', 'Pay %'];
+  if (secNum) pivotHeaders.push(`Toplam ${secNum}`);
+
+  const pivotRows = rows.map(r => {
+    const row = [r.name, r.count, Math.round(r.total * 100) / 100, Math.round(r.avg * 100) / 100, grandTotal > 0 ? Math.round((r.total / grandTotal) * 10000) / 100 : 0];
+    if (secNum) row.push(Math.round(r.secTotal * 100) / 100);
+    return row;
+  });
+
+  // Add total row
+  const totalRow = ['TOPLAM', grandCount, Math.round(grandTotal * 100) / 100, grandCount > 0 ? Math.round((grandTotal / grandCount) * 100) / 100 : 0, 100];
+  if (secNum) totalRow.push(Math.round(rows.reduce((s, r) => s + r.secTotal, 0) * 100) / 100);
+  pivotRows.push(totalRow);
+
+  const pivotData = [pivotHeaders, ...pivotRows];
+  const ws1 = XLSX.utils.aoa_to_sheet(pivotData);
+
+  // Set column widths
+  ws1['!cols'] = pivotHeaders.map((h, i) => ({ wch: i === 0 ? 25 : 18 }));
+
+  XLSX.utils.book_append_sheet(wb, ws1, 'Pivot Özet');
+
+  // Sheet 2: Filtered Raw Data
+  const rawHeaders = headers;
+  const rawRows = filtered.map(r => headers.map(h => {
+    let v = r[h];
+    if (v instanceof Date) return v.toLocaleDateString('tr-TR');
+    return v;
+  }));
+
+  const ws2 = XLSX.utils.aoa_to_sheet([rawHeaders, ...rawRows]);
+  ws2['!cols'] = rawHeaders.map(() => ({ wch: 18 }));
+  XLSX.utils.book_append_sheet(wb, ws2, 'Filtrelenmiş Veri');
+
+  // Active filters info sheet
+  const activeFilters = pivotState.filterCols.filter(f => pivotState.selected[f.key].size > 0);
+  if (activeFilters.length > 0) {
+    const filterInfo = [['Filtre', 'Seçilen Değerler']];
+    activeFilters.forEach(f => {
+      const vals = [...pivotState.selected[f.key]].join(', ');
+      filterInfo.push([f.label, vals]);
+    });
+    filterInfo.push([]);
+    filterInfo.push(['Toplam satır (filtresiz)', parsedData.length]);
+    filterInfo.push(['Toplam satır (filtreli)', filtered.length]);
+    filterInfo.push(['Rapor tarihi', new Date().toLocaleDateString('tr-TR')]);
+    const ws3 = XLSX.utils.aoa_to_sheet(filterInfo);
+    ws3['!cols'] = [{ wch: 20 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws3, 'Filtre Bilgisi');
+  }
+
+  XLSX.writeFile(wb, 'ExcelMind_Pivot_Rapor.xlsx');
+}
+
+function downloadSmartExcel() {
+  // Try backend API first, fallback to client-side generation
+  if (uploadedFile) {
+    generateSmartExcelViaBackend();
+    return;
+  }
+  // Fallback: client-side generation (no backend)
+  generateSmartExcelClientSide();
+}
+
+// Global to store the original uploaded file
+let uploadedFile = null;
+
+function generateSmartExcelViaBackend() {
+  const btn = document.querySelector('[onclick="downloadSmartExcel()"]');
+  const originalHTML = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span> Oluşturuluyor...';
+  btn.disabled = true;
+
+  const formData = new FormData();
+  formData.append('file', uploadedFile);
+  formData.append('type', selectedType || 'auto');
+
+  fetch('/api/generate', {
+    method: 'POST',
+    body: formData
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.error) {
+      alert('Hata: ' + data.error);
+      return;
+    }
+    // Download the file
+    const link = document.createElement('a');
+    link.href = data.download_url;
+    link.download = data.filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Show success info
+    const stats = data.stats || {};
+    const msg = `Akıllı Excel oluşturuldu!\n\nSayfalar: ${(stats.sheets||[]).join(', ')}\nFormül Sayısı: ${stats.formulas || '?'}\nFiltre: ${stats.filters || '?'}\nAna Değer: ${stats.main_value || '?'}`;
+    setTimeout(() => alert(msg), 500);
+  })
+  .catch(err => {
+    console.error('Backend error, falling back to client-side:', err);
+    // Fallback to client-side
+    generateSmartExcelClientSide();
+  })
+  .finally(() => {
+    btn.innerHTML = originalHTML;
+    btn.disabled = false;
+  });
+}
+
+function generateSmartExcelClientSide() {
+  const a = pivotState.analysis || analyzeData();
+  const mainNum = a.mainNumCol;
+  const catCol = a.catCol;
+
+  const wb = XLSX.utils.book_new();
+
+  // Detect category columns and their unique values
+  const catColumns = a.textCols.filter(col => {
+    const unique = new Set(parsedData.map(r => String(r[col] || '').trim()).filter(Boolean));
+    return unique.size >= 2 && unique.size <= 50;
+  });
+
+  // ===== SHEET 1: DASHBOARD with KPI formulas =====
+  const dashData = [
+    ['ExcelMind — Akıllı Dashboard'],
+    ['Dropdown filtrelerden seçim yapın → Tüm formüller otomatik güncellenir'],
+    [],
+    ['FİLTRELER', 'SEÇİM'],
+  ];
+
+  // Add filter rows with "Tümü" default
+  catColumns.slice(0, 3).forEach(col => {
+    dashData.push([col, 'Tümü']);
+  });
+  if (a.dateCols.length > 0) {
+    dashData.push(['Ay', 'Tümü']);
+  }
+
+  dashData.push([]);
+  dashData.push(['TEMEL METRİKLER']);
+
+  const mainColIdx = headers.indexOf(mainNum);
+  const mainColLetter = String.fromCharCode(65 + mainColIdx);
+  const dataEndRow = parsedData.length + 1;
+
+  dashData.push(['Toplam', { t: 'n', f: `SUM('Ham Veri'!${mainColLetter}2:${mainColLetter}${dataEndRow})` }]);
+  dashData.push(['İşlem Sayısı', { t: 'n', f: `COUNTA('Ham Veri'!${mainColLetter}2:${mainColLetter}${dataEndRow})` }]);
+  dashData.push(['Ortalama', { t: 'n', f: `AVERAGE('Ham Veri'!${mainColLetter}2:${mainColLetter}${dataEndRow})` }]);
+  dashData.push(['Maksimum', { t: 'n', f: `MAX('Ham Veri'!${mainColLetter}2:${mainColLetter}${dataEndRow})` }]);
+  dashData.push(['Minimum', { t: 'n', f: `MIN('Ham Veri'!${mainColLetter}2:${mainColLetter}${dataEndRow})` }]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(dashData);
+  ws1['!cols'] = [{ wch: 22 }, { wch: 25 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Dashboard');
+
+  // ===== SHEET 2: PIVOT ANALIZ with COUNTIFS/SUMIFS =====
+  const pivotCatCol = catCol || a.textCols[0];
+  const pivotCatIdx = headers.indexOf(pivotCatCol);
+  const pivotCatLetter = String.fromCharCode(65 + pivotCatIdx);
+  const uniqueVals = [...new Set(parsedData.map(r => String(r[pivotCatCol] || '').trim()).filter(Boolean))].sort();
+
+  const pivotData = [
+    ['ExcelMind — Dinamik Pivot Analiz'],
+    ['SUMIF & COUNTIF formülleri hazır — Excel\'de dropdown ile filtreleme yapabilirsiniz'],
+    [],
+    [pivotCatCol, 'İşlem Sayısı', `Toplam ${mainNum}`, 'Ortalama', 'Pay %'],
+  ];
+
+  const pivotStartRow = 5;
+  uniqueVals.forEach((val, i) => {
+    const r = pivotStartRow + i;
+    const safeVal = val.replace(/"/g, '""');
+    const countF = `COUNTIFS('Ham Veri'!${pivotCatLetter}$2:${pivotCatLetter}$${dataEndRow},"${safeVal}")`;
+    const sumF = `SUMIFS('Ham Veri'!${mainColLetter}$2:${mainColLetter}$${dataEndRow},'Ham Veri'!${pivotCatLetter}$2:${pivotCatLetter}$${dataEndRow},"${safeVal}")`;
+    const avgF = `IF(B${r}=0,0,C${r}/B${r})`;
+    const totalRow = pivotStartRow + uniqueVals.length;
+    const pctF = `IF(C$${totalRow}=0,0,C${r}/C$${totalRow})`;
+
+    pivotData.push([
+      val,
+      { t: 'n', f: countF },
+      { t: 'n', f: sumF },
+      { t: 'n', f: avgF },
+      { t: 'n', f: pctF },
+    ]);
+  });
+
+  // Total row
+  const totalRow = pivotStartRow + uniqueVals.length;
+  const firstR = pivotStartRow;
+  const lastR = totalRow - 1;
+  pivotData.push([
+    'TOPLAM',
+    { t: 'n', f: `SUM(B${firstR}:B${lastR})` },
+    { t: 'n', f: `SUM(C${firstR}:C${lastR})` },
+    { t: 'n', f: `IF(B${totalRow}=0,0,C${totalRow}/B${totalRow})` },
+    1,
+  ]);
+
+  const ws2 = XLSX.utils.aoa_to_sheet(pivotData);
+  ws2['!cols'] = [{ wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 16 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Pivot Analiz');
+
+  // ===== SHEET 3: CROSS TABLE (if 2+ category columns) =====
+  if (catColumns.length >= 2) {
+    const rowCat = catColumns[0];
+    const colCat = catColumns[1];
+    const rowCatIdx = headers.indexOf(rowCat);
+    const colCatIdx = headers.indexOf(colCat);
+    const rowCatLetter = String.fromCharCode(65 + rowCatIdx);
+    const colCatLetter = String.fromCharCode(65 + colCatIdx);
+    const rowVals = [...new Set(parsedData.map(r => String(r[rowCat] || '').trim()).filter(Boolean))].sort();
+    const colVals = [...new Set(parsedData.map(r => String(r[colCat] || '').trim()).filter(Boolean))].sort();
+
+    const crossData = [
+      [`ExcelMind — Çapraz Tablo (${rowCat} x ${colCat})`],
+      [],
+      [`${rowCat} \\ ${colCat}`, ...colVals, 'TOPLAM'],
+    ];
+
+    const crossStartRow = 4;
+    rowVals.forEach((rv, ri) => {
+      const r = crossStartRow + ri;
+      const safeRv = rv.replace(/"/g, '""');
+      const row = [rv];
+      colVals.forEach(cv => {
+        const safeCv = cv.replace(/"/g, '""');
+        row.push({ t: 'n', f: `SUMIFS('Ham Veri'!${mainColLetter}$2:${mainColLetter}$${dataEndRow},'Ham Veri'!${rowCatLetter}$2:${rowCatLetter}$${dataEndRow},"${safeRv}",'Ham Veri'!${colCatLetter}$2:${colCatLetter}$${dataEndRow},"${safeCv}")` });
+      });
+      const firstCol = String.fromCharCode(66);
+      const lastCol = String.fromCharCode(65 + colVals.length);
+      row.push({ t: 'n', f: `SUM(${firstCol}${r}:${lastCol}${r})` });
+      crossData.push(row);
+    });
+
+    // Total row
+    const cTotalR = crossStartRow + rowVals.length;
+    const cRow = ['TOPLAM'];
+    for (let ci = 0; ci <= colVals.length; ci++) {
+      const cl = String.fromCharCode(66 + ci);
+      cRow.push({ t: 'n', f: `SUM(${cl}${crossStartRow}:${cl}${cTotalR - 1})` });
+    }
+    crossData.push(cRow);
+
+    const ws3 = XLSX.utils.aoa_to_sheet(crossData);
+    ws3['!cols'] = crossData[2].map(() => ({ wch: 18 }));
+    XLSX.utils.book_append_sheet(wb, ws3, 'Çapraz Tablo');
+  }
+
+  // ===== SHEET 4: AYLIK TREND =====
+  if (a.timeSeries.length > 0) {
+    const trendData = [
+      ['ExcelMind — Aylık Trend'],
+      [],
+      ['Dönem', `Toplam ${mainNum}`, 'Değişim', 'Değişim %'],
+    ];
+    a.timeSeries.forEach(([period, val], i) => {
+      const r = 4 + i;
+      if (i === 0) {
+        trendData.push([period, val, '-', '-']);
+      } else {
+        trendData.push([
+          period,
+          val,
+          { t: 'n', f: `B${r}-B${r-1}` },
+          { t: 'n', f: `IF(B${r-1}=0,0,(B${r}-B${r-1})/B${r-1})` },
+        ]);
+      }
+    });
+    const ws4 = XLSX.utils.aoa_to_sheet(trendData);
+    ws4['!cols'] = [{ wch: 18 }, { wch: 22 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, ws4, 'Aylık Trend');
+  }
+
+  // ===== SHEET 5: HAM VERİ =====
+  const rawRows = parsedData.map(r => headers.map(h => {
+    let v = r[h];
+    if (v instanceof Date) return v.toLocaleDateString('tr-TR');
+    return v;
+  }));
+  const ws5 = XLSX.utils.aoa_to_sheet([headers, ...rawRows]);
+  ws5['!cols'] = headers.map(() => ({ wch: 18 }));
+  // Add auto filter
+  ws5['!autofilter'] = { ref: `A1:${String.fromCharCode(64 + headers.length)}${parsedData.length + 1}` };
+  XLSX.utils.book_append_sheet(wb, ws5, 'Ham Veri');
+
+  XLSX.writeFile(wb, 'ExcelMind_Akilli_Rapor.xlsx');
+}
+
+function downloadExcelReport() {
+  const a = pivotState.analysis || analyzeData();
+  const mainNum = a.mainNumCol;
+  const catCol = a.catCol;
+  const secNum = a.secNumCol;
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Dashboard Summary
+  const summaryData = [
+    ['ExcelMind AI — Dashboard Raporu'],
+    ['Rapor Tarihi', new Date().toLocaleDateString('tr-TR')],
+    ['Veri Tipi', getTypeName(selectedType)],
+    ['Toplam Satır', parsedData.length],
+    ['Toplam Sütun', headers.length],
+    [],
+    ['=== TEMEL METRİKLER ==='],
+    [`Toplam ${mainNum}`, Math.round(a.total * 100) / 100],
+    ['Ortalama', Math.round(a.avg * 100) / 100],
+    ['Maksimum', a.max],
+    ['Minimum', a.min],
+    [],
+    ['=== KATEGORİ DAĞILIMI ==='],
+    [catCol || 'Kategori', 'İşlem Sayısı', `Toplam ${mainNum}`, 'Ortalama', 'Pay %'],
+  ];
+
+  const grandTotal = a.total;
+  a.sorted.forEach(([name, g]) => {
+    summaryData.push([
+      name,
+      g.count,
+      Math.round(g.total * 100) / 100,
+      g.count > 0 ? Math.round((g.total / g.count) * 100) / 100 : 0,
+      grandTotal > 0 ? Math.round((g.total / grandTotal) * 10000) / 100 : 0
+    ]);
+  });
+
+  // AI Insights
+  summaryData.push([]);
+  summaryData.push(['=== AI İÇGÖRÜLER ===']);
+  if (a.topItem) {
+    const pct = ((a.topItem[1].total / a.total) * 100).toFixed(1);
+    summaryData.push([`En yüksek: ${a.topItem[0]} — toplam değerin %${pct}'i`]);
+    if (pct > 35) summaryData.push([`⚠ ${a.topItem[0]} yoğunlaşma riski taşıyor — çeşitlendirme önerilir`]);
+  }
+  if (a.timeSeries.length >= 3) {
+    const last = a.timeSeries[a.timeSeries.length - 1][1];
+    const prev = a.timeSeries[a.timeSeries.length - 2][1];
+    const change = ((last - prev) / prev * 100).toFixed(1);
+    summaryData.push([`Son dönem değişim: %${change} (${a.timeSeries[a.timeSeries.length-2][0]} → ${a.timeSeries[a.timeSeries.length-1][0]})`]);
+  }
+
+  const ws1 = XLSX.utils.aoa_to_sheet(summaryData);
+  ws1['!cols'] = [{ wch: 35 }, { wch: 18 }, { wch: 18 }, { wch: 18 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Dashboard Özet');
+
+  // Sheet 2: Monthly trend (if exists)
+  if (a.timeSeries.length > 0) {
+    const trendData = [['Dönem', `Toplam ${mainNum}`], ...a.timeSeries.map(([period, val]) => [period, Math.round(val * 100) / 100])];
+    const ws2 = XLSX.utils.aoa_to_sheet(trendData);
+    ws2['!cols'] = [{ wch: 15 }, { wch: 20 }];
+    XLSX.utils.book_append_sheet(wb, ws2, 'Aylık Trend');
+  }
+
+  // Sheet 3: Full raw data
+  const rawRows = parsedData.map(r => headers.map(h => {
+    let v = r[h];
+    if (v instanceof Date) return v.toLocaleDateString('tr-TR');
+    return v;
+  }));
+  const ws3 = XLSX.utils.aoa_to_sheet([headers, ...rawRows]);
+  ws3['!cols'] = headers.map(() => ({ wch: 18 }));
+  XLSX.utils.book_append_sheet(wb, ws3, 'Ham Veri');
+
+  XLSX.writeFile(wb, 'ExcelMind_Dashboard_Rapor.xlsx');
+}
+
+// ===== PDF DOWNLOAD =====
+async function downloadPDF() {
+  const btn = document.querySelector('.btn-sm');
+  btn.textContent = 'PDF oluşturuluyor...';
+  btn.disabled = true;
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const content = document.getElementById('dashboardContent');
+    const canvas = await html2canvas(content, { scale: 1.5, useCORS: true, backgroundColor: '#f0f4f8' });
+    const imgData = canvas.toDataURL('image/jpeg', 0.85);
+
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+    let position = 0;
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    while (position < pdfHeight) {
+      if (position > 0) pdf.addPage();
+      pdf.addImage(imgData, 'JPEG', 0, -position, pdfWidth, pdfHeight);
+      position += pageHeight;
+    }
+
+    pdf.save('ExcelMind_Report.pdf');
+  } catch(e) {
+    alert('PDF oluşturulurken hata: ' + e.message);
+  }
+
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/></svg> PDF İndir';
+  btn.disabled = false;
+}
+</script>
+
+</body>
+</html>
