@@ -1122,12 +1122,90 @@ function buildInsights(a) {
     insights.push({ icon: '📋', type: 'info', text: `Ortalama değer: <strong>${fmt(a.avg)}</strong>. Kayıtların <strong>%${pct}</strong>'i ortalamanın üzerinde.` });
   }
 
+  // Show rule-based insights first
   document.getElementById('insightList').innerHTML = insights.map(i => `
     <div class="insight-item">
       <div class="insight-icon ${i.type}">${i.icon}</div>
       <div>${i.text}</div>
     </div>
-  `).join('');
+  `).join('') + `
+    <div id="aiInsightsLoader" style="padding:16px;text-align:center;color:var(--blue)">
+      <div style="display:inline-flex;align-items:center;gap:10px;padding:12px 20px;background:linear-gradient(135deg,#eef5ff,#f0f0ff);border-radius:10px;">
+        <div class="spinner" style="width:18px;height:18px;border:2px solid #ddd;border-top:2px solid var(--blue);border-radius:50%;animation:spin 1s linear infinite"></div>
+        <span>Claude AI analiz ediyor...</span>
+      </div>
+      <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+    </div>
+  `;
+
+  // Call Claude AI in background
+  fetchAIInsights();
+}
+
+function fetchAIInsights() {
+  if (!uploadedFile) {
+    document.getElementById('aiInsightsLoader').style.display = 'none';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('file', uploadedFile);
+
+  fetch('/api/ai-analyze', { method: 'POST', body: formData })
+    .then(res => res.json())
+    .then(data => {
+      const loader = document.getElementById('aiInsightsLoader');
+      if (data.error || !data.success) {
+        loader.innerHTML = '<div style="color:#999;font-size:13px;padding:8px">AI analiz şu an kullanılamıyor.</div>';
+        return;
+      }
+
+      const ai = data.ai_analysis;
+      let html = '<div style="margin-top:16px;border-top:2px solid var(--blue);padding-top:16px">';
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;font-weight:700;color:var(--blue-dark);font-size:15px">';
+      html += '<svg viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2" width="20" height="20"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>';
+      html += 'Claude AI Analizi</div>';
+
+      // Summary
+      if (ai.summary) {
+        html += `<div style="padding:12px 16px;background:linear-gradient(135deg,#f0f7ff,#f5f0ff);border-radius:10px;margin-bottom:12px;font-size:14px;line-height:1.6;color:#1a2332"><strong>Özet:</strong> ${ai.summary}</div>`;
+      }
+
+      // AI Insights
+      if (ai.insights && ai.insights.length > 0) {
+        const icons = ['🤖', '🔍', '💡', '⚡', '🎯'];
+        ai.insights.forEach((insight, idx) => {
+          html += `<div class="insight-item"><div class="insight-icon info">${icons[idx % icons.length]}</div><div>${insight}</div></div>`;
+        });
+      }
+
+      // Risk alerts
+      if (ai.risk_alerts && ai.risk_alerts.length > 0) {
+        ai.risk_alerts.forEach(alert => {
+          if (alert && alert.trim()) {
+            html += `<div class="insight-item"><div class="insight-icon warn">⚠️</div><div>${alert}</div></div>`;
+          }
+        });
+      }
+
+      // KPI suggestions
+      if (ai.kpi_suggestions && ai.kpi_suggestions.length > 0) {
+        html += '<div style="margin-top:12px;padding:12px 16px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0">';
+        html += '<div style="font-weight:600;color:var(--blue-dark);margin-bottom:8px;font-size:13px">Önerilen KPI\'lar:</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px">';
+        ai.kpi_suggestions.forEach(kpi => {
+          html += `<div style="padding:8px 12px;background:white;border-radius:8px;border:1px solid #e8edf2"><strong style="font-size:13px;color:var(--blue)">${kpi.label}</strong><div style="font-size:12px;color:#6B7C93;margin-top:2px">${kpi.description}</div></div>`;
+        });
+        html += '</div></div>';
+      }
+
+      html += '</div>';
+      loader.innerHTML = html;
+    })
+    .catch(err => {
+      console.error('[AI]', err);
+      document.getElementById('aiInsightsLoader').innerHTML = '<div style="color:#999;font-size:13px;padding:8px">AI analiz bağlantısı kurulamadı.</div>';
+    });
 }
 
 // ===== DATA TABLE =====

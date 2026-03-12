@@ -27,6 +27,8 @@ from io import BytesIO
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import openpyxl
+import urllib.request
+import ssl
 
 # ============================================================
 # CONFIGURATION
@@ -35,6 +37,7 @@ PORT = int(os.environ.get("PORT", 8080))
 HOST = "0.0.0.0"
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uploads")
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "outputs")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 FRONTEND_DIR = os.path.dirname(os.path.abspath(__file__))
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -166,6 +169,8 @@ class ExcelMindHandler(SimpleHTTPRequestHandler):
                 self.handle_analyze(body, content_type)
             elif path == '/api/generate':
                 self.handle_generate(body, content_type)
+            elif path == '/api/ai-analyze':
+                self.handle_ai_analyze(body, content_type)
             else:
                 self.send_error(404)
         except Exception as e:
@@ -241,6 +246,121 @@ class ExcelMindHandler(SimpleHTTPRequestHandler):
             if os.path.exists(input_path):
                 os.remove(input_path)
 
+    # --- API: AI-powered analysis via Claude ---
+    def handle_ai_analyze(self, body, content_type):
+        if not ANTHROPIC_API_KEY:
+            self.send_json(400, {'error': 'API key not configured'})
+            return
+
+        fields, files = parse_multipart(body, content_type)
+
+        if 'file' not in files:
+            self.send_json(400, {'error': 'No file uploaded'})
+            return
+
+        file_info = files['file']
+        tmp_path = os.path.join(UPLOAD_DIR, f"tmp_{uuid.uuid4().hex}.xlsx")
+
+        try:
+            with open(tmp_path, 'wb') as f:
+                f.write(file_info['data'])
+
+            # Read Excel data
+            from smart_excel_engine import read_excel
+            headers_list, data_rows, sheet_name = read_excel(tmp_path)
+
+            # Prepare data sample for Claude (first 15 rows)
+            sample_rows = data_rows[:15]
+            csv_lines = []
+            csv_lines.append(' | '.join(str(h) for h in headers_list))
+            csv_lines.append('-' * 80)
+            for row in sample_rows:
+                csv_lines.append(' | '.join(str(v)[:30] if v is not None else '' for v in row))
+
+            data_sample = '\n'.join(csv_lines)
+            total_rows = len(data_rows)
+
+            # Build prompt
+            prompt = f"""Sen bir veri analiz uzmanısın. Aşağıdaki Excel verisini analiz et.
+
+Dosya adı: {file_info['filename']}
+Sayfa adı: {sheet_name}
+Toplam satır: {total_rows}
+Sütun sayısı: {len(headers_list)}
+
+İlk 15 satır:
+{data_sample}
+
+Lütfen şu JSON formatında yanıt ver (SADECE JSON, başka metin yazma):
+{{
+  "data_type": "sales|finance|bank|hr|inventory|ecommerce|cashflow|customers|general",
+  "data_type_tr": "Türkçe veri türü adı",
+  "summary": "Verinin 1-2 cümlelik Türkçe özeti",
+  "column_roles": {{
+    "main_value": "Ana sayısal değer sütunu adı",
+    "category": "Ana kategori sütunu adı",
+    "date": "Tarih sütunu adı veya null",
+    "filters": ["Filtre olarak kullanılabilecek sütun adları"]
+  }},
+  "insights": [
+    "Veri hakkında önemli bulgu 1 (Türkçe)",
+    "Veri hakkında önemli bulgu 2 (Türkçe)",
+    "Veri hakkında önemli bulgu 3 (Türkçe)",
+    "İş önerisi veya dikkat edilecek nokta (Türkçe)",
+    "Trend veya pattern tespiti (Türkçe)"
+  ],
+  "kpi_suggestions": [
+    {{"label": "KPI adı", "description": "Ne anlama geldiği"}},
+    {{"label": "KPI adı", "description": "Ne anlama geldiği"}},
+    {{"label": "KPI adı", "description": "Ne anlama geldiği"}},
+    {{"label": "KPI adı", "description": "Ne anlama geldiği"}}
+  ],
+  "risk_alerts": [
+    "Varsa risk veya uyarı (Türkçe)"
+  ]
+}}"""
+
+            # Call Claude API
+            ai_result = call_claude_api(prompt)
+
+            if ai_result:
+                # Try to parse JSON from response
+                try:
+                    # Extract JSON from response (Claude might add extra text)
+                    json_str = ai_result
+                    if '```json' in json_str:
+                        json_str = json_str.split('```json')[1].split('```')[0]
+                    elif '```' in json_str:
+                        json_str = json_str.split('```')[1].split('```')[0]
+
+                    # Find first { and last }
+                    start = json_str.index('{')
+                    end = json_str.rindex('}') + 1
+                    json_str = json_str[start:end]
+
+                    parsed = json.loads(json_str)
+                    self.send_json(200, {'success': True, 'ai_analysis': parsed})
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"[AI] JSON parse error: {e}")
+                    print(f"[AI] Raw response: {ai_result[:500]}")
+                    self.send_json(200, {
+                        'success': True,
+                        'ai_analysis': {
+                            'insights': [ai_result[:500]],
+                            'data_type': 'general',
+                            'summary': ai_result[:200]
+                        }
+                    })
+            else:
+                self.send_json(500, {'error': 'Claude API call failed'})
+
+        except Exception as e:
+            traceback.print_exc()
+            self.send_json(500, {'error': f'AI analysis failed: {str(e)}'})
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
     # --- Helpers ---
     def send_json(self, code, data):
         body = json.dumps(data, ensure_ascii=False, default=str).encode('utf-8')
@@ -280,6 +400,47 @@ class ExcelMindHandler(SimpleHTTPRequestHandler):
 # ============================================================
 # MAIN
 # ============================================================
+# ============================================================
+# CLAUDE API CALLER
+# ============================================================
+def call_claude_api(prompt, max_tokens=2000):
+    """Call Anthropic Claude API using urllib (no external deps)"""
+    if not ANTHROPIC_API_KEY:
+        print("[AI] No API key configured")
+        return None
+
+    url = "https://api.anthropic.com/v1/messages"
+    payload = json.dumps({
+        "model": "claude-sonnet-4-20250514",
+        "max_tokens": max_tokens,
+        "messages": [{"role": "user", "content": prompt}]
+    }).encode('utf-8')
+
+    headers_dict = {
+        "Content-Type": "application/json",
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01"
+    }
+
+    try:
+        req = urllib.request.Request(url, data=payload, headers=headers_dict, method='POST')
+        ctx = ssl.create_default_context()
+
+        with urllib.request.urlopen(req, context=ctx, timeout=30) as resp:
+            result = json.loads(resp.read().decode('utf-8'))
+            if 'content' in result and len(result['content']) > 0:
+                text = result['content'][0].get('text', '')
+                print(f"[AI] Claude response: {len(text)} chars")
+                return text
+            else:
+                print(f"[AI] Unexpected response: {result}")
+                return None
+    except Exception as e:
+        print(f"[AI] API error: {e}")
+        traceback.print_exc()
+        return None
+
+
 def main():
     print(f"""
 ╔══════════════════════════════════════════════════╗
