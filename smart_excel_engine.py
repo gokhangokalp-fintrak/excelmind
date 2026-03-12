@@ -90,16 +90,24 @@ def detect_data_type(headers, data_rows):
     if re.search(r'hesap', header_text) and re.search(r'bakiye|tutar|işlem', header_text):
         return 'bank'
 
-    # Finance (Gelir-Gider) — check ALL text including data values
-    if re.search(r'gelir|gider|expense|income|maliyet|cost|kâr|kar|profit|zarar|loss|bütçe|butce|budget', all_text):
+    # HR — check BEFORE finance (maaş/salary can overlap, but departman+pozisyon is unique to HR)
+    if re.search(r'departman|department|pozisyon|position|çalışan|calisan|employee', header_text):
+        return 'hr'
+    if re.search(r'maaş|maas|salary', header_text) and re.search(r'personel|sicil|işegiriş|isegiris|unvan', header_text):
+        return 'hr'
+
+    # Finance (Gelir-Gider) — headers first, then data values with specific patterns (avoid "kar" matching names)
+    if re.search(r'gelir|gider|expense|income|maliyet|cost|kâr|profit|zarar|loss|bütçe|butce|budget', header_text):
+        return 'finance'
+    if re.search(r'\bgelir\b|\bgider\b', data_text):
         return 'finance'
 
     # Cash flow
     if re.search(r'nakit|cash|flow|tahsilat|borç|borc|alacak', header_text):
         return 'cashflow'
 
-    # HR
-    if re.search(r'çalışan|calisan|employee|maaş|maas|salary|departman|department|pozisyon|position', header_text):
+    # HR fallback (maaş alone)
+    if re.search(r'maaş|maas|salary', header_text):
         return 'hr'
 
     # Customer

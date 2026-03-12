@@ -722,14 +722,18 @@ function detectDataType(headers, data) {
   if (/stok|stock|envanter|inventory|depo|warehouse|miktar/i.test(all)) return 'inventory';
   // Bank
   if (/banka|bank|hesap|account|iban|havale|eft|virman/i.test(all)) return 'bank';
-  // Finance (Gelir-Gider) — check headers AND data values, BEFORE cashflow
-  if (/gelir|gider|expense|income|maliyet|cost|kâr|kar|profit|zarar|loss|bütçe|butce|budget/i.test(allWithData)) return 'finance';
+  // HR — check BEFORE finance (maaş/salary can overlap, but departman+pozisyon is unique to HR)
+  if (/departman|department|pozisyon|position|çalışan|calisan|employee/i.test(all)) return 'hr';
+  if (/maaş|maas|salary/i.test(all) && /personel|sicil|işegiriş|isegiris|unvan/i.test(all)) return 'hr';
+  // Finance (Gelir-Gider) — check headers AND data values, use specific patterns (avoid short words like "kar" matching names)
+  if (/gelir|gider|expense|income|maliyet|cost|kâr|profit|zarar|loss|bütçe|butce|budget/i.test(all)) return 'finance';
+  if (/\bgelir\b|\bgider\b/i.test(sampleValues)) return 'finance';
   // Cash flow — specific keywords only
   if (/nakit|cash|flow|tahsilat|borç|borc|alacak/i.test(all)) return 'cashflow';
   // "ödeme" alone without gelir/gider in data → cashflow
   if (/ödeme|odeme/i.test(all) && !/gelir|gider/i.test(allWithData)) return 'cashflow';
-  // HR
-  if (/çalışan|calisan|employee|maaş|maas|salary|departman|department|pozisyon|position/i.test(all)) return 'hr';
+  // HR fallback (maaş alone)
+  if (/maaş|maas|salary/i.test(all)) return 'hr';
   // Customer
   if (/müşteri|musteri|customer|client|firma|company|telefon|phone|email|adres|address/i.test(all)) return 'customers';
 
@@ -1420,8 +1424,18 @@ function applyPivotFilters() {
   document.querySelectorAll('.filter-dropdown-btn').forEach(b => b.classList.remove('open'));
 
   const filtered = getFilteredData();
+  console.log('[ExcelMind] Filtered data:', filtered.length, 'rows');
   renderPivotData(filtered);
-  renderFilteredDataTable(filtered);
+  try {
+    renderFilteredDataTable(filtered);
+    // Scroll to filtered table
+    const sec = document.getElementById('filteredDataSection');
+    if (sec && sec.style.display !== 'none') {
+      setTimeout(() => sec.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300);
+    }
+  } catch(e) {
+    console.error('[ExcelMind] renderFilteredDataTable error:', e);
+  }
 }
 
 function resetPivotFilters() {
