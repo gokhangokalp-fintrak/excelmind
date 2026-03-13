@@ -232,11 +232,11 @@ def _read_xlsx(input_path):
     # Smart header detection
     header_row = find_header_row(ws)
 
-    headers = [ws.cell(header_row, c).value for c in range(1, (ws.max_column or 1) + 1)]
+    raw_headers = [ws.cell(header_row, c).value for c in range(1, (ws.max_column or 1) + 1)]
     # Clean headers — replace None with Column_N
-    headers = [h if h is not None else f"Column_{i+1}" for i, h in enumerate(headers)]
+    raw_headers = [h if h is not None else f"Column_{i+1}" for i, h in enumerate(raw_headers)]
 
-    data_rows = []
+    raw_data_rows = []
     for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
         if not any(v is not None for v in row):
             continue
@@ -261,8 +261,12 @@ def _read_xlsx(input_path):
                 try:
                     parts = val.split('.')
                     if len(parts) == 3 and len(parts[2]) == 4:
-                        row_list[ci] = datetime(int(parts[2]), int(parts[1]), int(parts[0]))
-                        continue
+                        year = int(parts[2])
+                        month = int(parts[1])
+                        day = int(parts[0])
+                        if 1 <= month <= 12 and 1 <= day <= 31:
+                            row_list[ci] = ('__date_raw__', year, month, day)
+                            continue
                 except:
                     pass
                 # Try numeric strings: "31552.00", "167 869.03" (space thousands sep)
@@ -275,9 +279,70 @@ def _read_xlsx(input_path):
                 except:
                     pass
 
-        data_rows.append(row_list)
+        raw_data_rows.append(row_list)
 
     src.close()
+
+    # Post-process dates: find dominant year and fix outliers
+    year_counts = {}
+    current_year = datetime.now().year
+    for row in raw_data_rows:
+        for ci, val in enumerate(row):
+            if isinstance(val, tuple) and val[0] == '__date_raw__':
+                y = val[1]
+                year_counts[y] = year_counts.get(y, 0) + 1
+
+    if year_counts:
+        # Find the most common year
+        dominant_year = max(year_counts, key=year_counts.get)
+        # Also accept years within ±2 of dominant as valid
+        valid_years = set(y for y in year_counts if abs(y - dominant_year) <= 2)
+        fixed_count = 0
+        for row in raw_data_rows:
+            for ci, val in enumerate(row):
+                if isinstance(val, tuple) and val[0] == '__date_raw__':
+                    _, y, m, d = val
+                    if y not in valid_years:
+                        y = dominant_year
+                        fixed_count += 1
+                    try:
+                        row[ci] = datetime(y, m, d)
+                    except ValueError:
+                        row[ci] = datetime(y, m, min(d, 28))  # Handle Feb 29 etc
+        if fixed_count:
+            print(f"[ENGINE] Fixed {fixed_count} dates with outlier years → {dominant_year}")
+    else:
+        # No raw dates, just convert any remaining markers
+        for row in raw_data_rows:
+            for ci, val in enumerate(row):
+                if isinstance(val, tuple) and val[0] == '__date_raw__':
+                    _, y, m, d = val
+                    try:
+                        row[ci] = datetime(y, m, d)
+                    except ValueError:
+                        row[ci] = datetime(y, m, min(d, 28))
+
+    # Remove nearly-empty columns (>90% empty values)
+    n_total = len(raw_data_rows)
+    if n_total > 0:
+        keep_cols = []
+        for ci in range(len(raw_headers)):
+            filled = sum(1 for r in raw_data_rows if ci < len(r) and r[ci] is not None and str(r[ci]).strip())
+            fill_rate = filled / n_total
+            # Keep column if: >10% filled OR it's a named header (not Column_N pattern)
+            if fill_rate > 0.1 or (not raw_headers[ci].startswith('Column_')):
+                keep_cols.append(ci)
+            else:
+                print(f"[ENGINE] Dropping nearly-empty column: {raw_headers[ci]} ({filled}/{n_total} = {fill_rate:.1%})")
+
+        headers = [raw_headers[ci] for ci in keep_cols]
+        data_rows = []
+        for row in raw_data_rows:
+            data_rows.append([row[ci] if ci < len(row) else None for ci in keep_cols])
+    else:
+        headers = raw_headers
+        data_rows = raw_data_rows
+
     return headers, data_rows, sheet_name
 
 # ============================================================
@@ -309,8 +374,13 @@ def analyze_columns(headers, data_rows):
         # Categorical
         str_vals = [str(v).strip() for v in vals if v]
         unique = set(str_vals)
-        if 2 <= len(unique) <= 30 and len(unique) < n * 0.3:
-            roles[ci] = {'type': 'categorical', 'header': header, 'unique': sorted(unique)}
+        # Filter out junk values: single chars like ".", empty-ish, or purely special chars
+        clean_unique = set()
+        for u in unique:
+            if len(u) >= 2 or u.isalnum():
+                clean_unique.add(u)
+        if 2 <= len(clean_unique) <= 50 and len(clean_unique) < n * 0.3:
+            roles[ci] = {'type': 'categorical', 'header': header, 'unique': sorted(clean_unique)}
             continue
 
         # Text (high cardinality)
@@ -489,11 +559,11 @@ def build_smart_excel(input_path, output_path):
     if main_value is None:
         raise ValueError("No numeric value column found in the data!")
 
-    # Extract unique values for filters
+    # Extract unique values for filters (skip junk like ".", single special chars)
     filter_data = {}
     for fi in filter_cols:
-        vals = sorted(set(str(r[fi]).strip() for r in data_rows if fi < len(r) and r[fi] is not None))
-        filter_data[fi] = vals
+        raw_vals = sorted(set(str(r[fi]).strip() for r in data_rows if fi < len(r) and r[fi] is not None and str(r[fi]).strip()))
+        filter_data[fi] = [v for v in raw_vals if len(v) >= 2 or v.isalnum()]
 
     # Extract months
     months_set = set()
@@ -725,11 +795,19 @@ def build_smart_excel(input_path, output_path):
         for r in data_rows[:100] if main_value < len(r) and r[main_value]
     )
 
-    kpi_formulas = [
-        (1, "Toplam", f'=SUMIFS({val_range},{criteria})'),
-        (3, "İşlem Sayısı", f'=COUNTIFS({criteria})'),
-        (5, "Ortalama", '=IF(C10=0,0,A10/C10)'),
-    ]
+    # If no criteria (no filters), fall back to SUM/COUNTA
+    if criteria:
+        kpi_formulas = [
+            (1, "Toplam", f'=SUMIFS({val_range},{criteria})'),
+            (3, "İşlem Sayısı", f'=COUNTIFS({criteria})'),
+            (5, "Ortalama", '=IF(C10=0,0,A10/C10)'),
+        ]
+    else:
+        kpi_formulas = [
+            (1, "Toplam", f'=SUM({val_range})'),
+            (3, "İşlem Sayısı", f'=COUNTA({val_range})'),
+            (5, "Ortalama", '=IF(C10=0,0,A10/C10)'),
+        ]
 
     if has_negatives:
         kpi_formulas.append((7, "Net Kar/Zarar", '=A10'))
